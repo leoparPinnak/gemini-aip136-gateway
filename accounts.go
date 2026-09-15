@@ -312,8 +312,11 @@ func (s *AccountStore) RefreshAccountToken(acc *Account) (string, error) {
 		return acc.AccessToken, nil
 	}
 
+	cid, csec := getOAuthCredentials()
+
 	data := url.Values{}
-	data.Set("client_id", GoogleClientID)
+	data.Set("client_id", cid)
+	data.Set("client_secret", csec)
 	data.Set("refresh_token", acc.RefreshToken)
 	data.Set("grant_type", "refresh_token")
 
@@ -373,9 +376,11 @@ func (s *AccountStore) RefreshAccountQuota(id string) (*AccountQuota, error) {
 
 	// Token geçerliliğini sağla
 	token := acc.AccessToken
-	if token == "" || acc.RefreshToken != "" {
+	if acc.RefreshToken != "" {
 		if t, err := s.RefreshAccountToken(acc); err == nil && t != "" {
 			token = t
+		} else if err != nil {
+			log.Printf("[AccountStore] Kota sorgulama öncesi token yenileme uyarısı (%s): %v", acc.Email, err)
 		}
 	}
 

@@ -127,8 +127,11 @@ func (a *AuthManager) readOAuthFile() string {
 }
 
 func (a *AuthManager) refreshOAuthToken(refreshToken string) (string, error) {
+	cid, csec := getOAuthCredentials()
+
 	data := url.Values{}
-	data.Set("client_id", GoogleClientID)
+	data.Set("client_id", cid)
+	data.Set("client_secret", csec)
 	data.Set("refresh_token", refreshToken)
 	data.Set("grant_type", "refresh_token")
 
