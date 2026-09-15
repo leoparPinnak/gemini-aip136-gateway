@@ -818,6 +818,8 @@
     }
 
     // 2. WebSocket Connection
+    let wsPingTimer = null;
+
     function connectWebSocket() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -827,11 +829,18 @@
       ws.onopen = () => {
         document.getElementById('wsDot').className = "size-2 rounded-full bg-emerald-400 animate-pulse";
         document.getElementById('wsText').textContent = "Canlı Bağlantı";
+        if (wsPingTimer) clearInterval(wsPingTimer);
+        wsPingTimer = setInterval(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'ping' }));
+          }
+        }, 20000);
       };
 
       ws.onclose = () => {
         document.getElementById('wsDot').className = "size-2 rounded-full bg-destructive";
         document.getElementById('wsText').textContent = "Yeniden Bağlanıyor...";
+        if (wsPingTimer) clearInterval(wsPingTimer);
         setTimeout(connectWebSocket, 2500);
       };
 
@@ -1259,8 +1268,25 @@
     function renderRecentRequests(requests) {
       const tbody = document.getElementById('requestsTableBody');
       if (!requests || requests.length === 0) return;
-      tbody.innerHTML = '';
-      requests.forEach(r => appendRequestRow(r, false));
+
+      if (tbody.children.length === 1 && tbody.children[0].innerText.includes('Henüz')) {
+        tbody.innerHTML = '';
+      }
+
+      // İstekleri ekle veya mevcutsa güncelle
+      for (let i = requests.length - 1; i >= 0; i--) {
+        const req = requests[i];
+        const existing = document.getElementById('req-' + req.id);
+        if (existing) {
+          existing.innerHTML = createRequestRowHTML(req);
+        } else {
+          const tr = document.createElement('tr');
+          tr.id = 'req-' + req.id;
+          tr.className = "hover:bg-muted/30 transition-colors";
+          tr.innerHTML = createRequestRowHTML(req);
+          tbody.appendChild(tr);
+        }
+      }
     }
 
     function prependLiveRequest(req) {
@@ -1278,6 +1304,11 @@
       tr.className = "hover:bg-muted/30 transition-colors";
       tr.innerHTML = createRequestRowHTML(req);
       tbody.insertBefore(tr, tbody.firstChild);
+
+      // Maksimum 50 istek göster, fazlasını alttan düşür
+      if (tbody.children.length > 50) {
+        tbody.removeChild(tbody.lastChild);
+      }
     }
 
     function createRequestRowHTML(req) {

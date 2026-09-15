@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -206,12 +205,9 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		buf := make([]byte, 1024)
 		for {
-			_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+			_ = conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 			_, err := conn.Read(buf)
 			if err != nil {
-				if err != io.EOF {
-					// Okuma hatası
-				}
 				break
 			}
 		}
