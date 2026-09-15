@@ -1,1158 +1,781 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="tr" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gemini AIP-136 Control Center & Protocol Gateway</title>
+  <title>Gemini AIP-136 Gateway — shadcn/ui v4 Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+          },
+          colors: {
+            background: 'var(--background)',
+            foreground: 'var(--foreground)',
+            card: {
+              DEFAULT: 'var(--card)',
+              foreground: 'var(--card-foreground)',
+            },
+            popover: {
+              DEFAULT: 'var(--popover)',
+              foreground: 'var(--popover-foreground)',
+            },
+            primary: {
+              DEFAULT: 'var(--primary)',
+              foreground: 'var(--primary-foreground)',
+            },
+            secondary: {
+              DEFAULT: 'var(--secondary)',
+              foreground: 'var(--secondary-foreground)',
+            },
+            muted: {
+              DEFAULT: 'var(--muted)',
+              foreground: 'var(--muted-foreground)',
+            },
+            accent: {
+              DEFAULT: 'var(--accent)',
+              foreground: 'var(--accent-foreground)',
+            },
+            destructive: {
+              DEFAULT: 'var(--destructive)',
+              foreground: 'var(--destructive-foreground)',
+            },
+            border: 'var(--border)',
+            input: 'var(--input)',
+            ring: 'var(--ring)',
+            sidebar: {
+              DEFAULT: 'var(--sidebar)',
+              foreground: 'var(--sidebar-foreground)',
+              border: 'var(--sidebar-border)',
+              accent: 'var(--sidebar-accent)',
+            }
+          },
+          borderRadius: {
+            lg: 'var(--radius)',
+            md: 'calc(var(--radius) - 2px)',
+            sm: 'calc(var(--radius) - 4px)',
+            xl: 'calc(var(--radius) + 4px)',
+            '2xl': 'calc(var(--radius) + 8px)',
+          }
+        }
+      }
+    }
+  </script>
   <style>
-    :root {
-      --bg-base: #060911;
-      --bg-glass: rgba(13, 19, 34, 0.72);
-      --bg-glass-elevated: rgba(20, 29, 51, 0.85);
-      --bg-card: rgba(15, 23, 42, 0.65);
-      --bg-card-hover: rgba(22, 33, 58, 0.85);
-      --border-glass: rgba(255, 255, 255, 0.08);
-      --border-glass-bright: rgba(56, 189, 248, 0.35);
-      --specular: rgba(255, 255, 255, 0.18);
-      --primary: #38bdf8;
-      --primary-glow: rgba(56, 189, 248, 0.25);
-      --accent: #818cf8;
-      --accent-glow: rgba(129, 140, 248, 0.25);
-      --success: #10b981;
-      --success-glow: rgba(16, 185, 129, 0.25);
-      --warning: #f59e0b;
-      --warning-glow: rgba(245, 158, 11, 0.25);
-      --danger: #ef4444;
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --text-dim: #64748b;
-      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-      --font-mono: 'JetBrains Mono', monospace;
+    :root, .dark {
+      --radius: 0.625rem;
+      --background: oklch(0.145 0 0);
+      --foreground: oklch(0.985 0 0);
+      --card: oklch(0.185 0 0);
+      --card-foreground: oklch(0.985 0 0);
+      --popover: oklch(0.205 0 0);
+      --popover-foreground: oklch(0.985 0 0);
+      --primary: oklch(0.922 0 0);
+      --primary-foreground: oklch(0.145 0 0);
+      --secondary: oklch(0.24 0 0);
+      --secondary-foreground: oklch(0.985 0 0);
+      --muted: oklch(0.22 0 0);
+      --muted-foreground: oklch(0.65 0 0);
+      --accent: oklch(0.25 0 0);
+      --accent-foreground: oklch(0.985 0 0);
+      --destructive: oklch(0.65 0.22 25);
+      --destructive-foreground: oklch(0.985 0 0);
+      --border: oklch(1 0 0 / 10%);
+      --input: oklch(1 0 0 / 14%);
+      --ring: oklch(0.6 0 0);
+      --sidebar: oklch(0.16 0 0);
+      --sidebar-foreground: oklch(0.985 0 0);
+      --sidebar-border: oklch(1 0 0 / 8%);
+      --sidebar-accent: oklch(0.22 0 0);
+      --header-height: 3.5rem;
+      --sidebar-width: 16.5rem;
     }
 
     * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
+      border-color: var(--border);
     }
 
     body {
-      background-color: var(--bg-base);
-      color: var(--text-main);
-      font-family: var(--font-sans);
-      min-height: 100vh;
+      background-color: var(--background);
+      color: var(--foreground);
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
       overflow-x: hidden;
-      background-image: 
-        radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.06) 0%, transparent 40%),
-        radial-gradient(circle at 85% 85%, rgba(129, 140, 248, 0.06) 0%, transparent 40%),
-        radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.03) 0%, transparent 60%);
-      background-attachment: fixed;
     }
 
-    /* LIQUID GLASS TOP NAV */
-    header {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 28px;
-      background: var(--bg-glass);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border-glass);
-      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .brand-logo {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, #0ea5e9, #6366f1);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      box-shadow: 0 0 20px var(--primary-glow), inset 0 1px 1px rgba(255, 255, 255, 0.5);
-    }
-
-    .brand-title {
-      font-size: 17px;
-      font-weight: 700;
-      letter-spacing: -0.3px;
-      background: linear-gradient(90deg, #f8fafc, #94a3b8);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .brand-sub {
-      font-size: 12px;
-      color: var(--text-dim);
-      font-weight: 500;
-    }
-
-    .nav-actions {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .view-toggle {
-      display: flex;
-      background: rgba(15, 23, 42, 0.7);
-      padding: 4px;
-      border-radius: 10px;
-      border: 1px solid var(--border-glass);
-    }
-
-    .view-btn {
-      padding: 6px 14px;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text-muted);
-      border: none;
-      background: transparent;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.2s ease;
-    }
-
-    .view-btn.active {
-      background: var(--bg-glass-elevated);
-      color: var(--primary);
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-    }
-
-    .ws-indicator {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      padding: 6px 12px;
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      border-radius: 20px;
-      color: #6ee7b7;
-      font-weight: 600;
-    }
-
-    .ws-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--success);
-      box-shadow: 0 0 10px var(--success);
-      animation: pulse 2s infinite;
-    }
-
-    .ws-dot.offline {
-      background: var(--danger);
-      box-shadow: 0 0 10px var(--danger);
-      animation: none;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.85); }
-    }
-
-    /* MAIN WRAPPER */
-    main {
-      max-width: 1560px;
-      margin: 0 auto;
-      padding: 24px;
-    }
-
-    .tab-content {
-      display: none;
-    }
-
-    .tab-content.active {
-      display: block;
-      animation: fadeIn 0.25s ease-out;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* LIQUID GLASS PANELS */
-    .glass-panel {
-      background: var(--bg-card);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid var(--border-glass);
-      border-radius: 16px;
-      padding: 20px;
-      margin-bottom: 24px;
-      position: relative;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-    }
-
-    .panel-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 18px;
-    }
-
-    .panel-title {
-      font-size: 16px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      color: var(--text-main);
-    }
-
-    .panel-title .icon {
-      font-size: 18px;
-    }
-
-    /* OVERRIDE SECTION */
-    .override-grid {
-      display: grid;
-      grid-template-columns: 1fr 1.2fr 1fr;
-      gap: 18px;
-      align-items: center;
-    }
-
-    @media (max-width: 1024px) {
-      .override-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .switch-card {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 14px 18px;
-      border-radius: 12px;
-      background: var(--bg-glass-elevated);
-      border: 1px solid var(--border-glass);
-      transition: all 0.2s ease;
-    }
-
-    .switch-card.active-override {
-      border-color: rgba(245, 158, 11, 0.5);
-      box-shadow: 0 0 25px rgba(245, 158, 11, 0.15);
-      background: rgba(245, 158, 11, 0.08);
-    }
-
-    /* TOGGLE SWITCH */
+    /* Custom Toggle Switch */
     .toggle-switch {
       position: relative;
       display: inline-block;
-      width: 52px;
-      height: 28px;
+      width: 44px;
+      height: 24px;
       flex-shrink: 0;
     }
-
     .toggle-switch input {
       opacity: 0;
       width: 0;
       height: 0;
     }
-
-    .slider {
+    .toggle-slider {
       position: absolute;
       cursor: pointer;
       top: 0; left: 0; right: 0; bottom: 0;
-      background-color: #334155;
-      transition: 0.3s;
-      border-radius: 34px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      background-color: var(--muted);
+      border: 1px solid var(--border);
+      transition: .2s ease;
+      border-radius: 9999px;
     }
-
-    .slider:before {
+    .toggle-slider:before {
       position: absolute;
       content: "";
-      height: 20px;
-      width: 20px;
-      left: 3px;
-      bottom: 3px;
-      background-color: white;
-      transition: 0.3s;
+      height: 18px;
+      width: 18px;
+      left: 2px;
+      bottom: 2px;
+      background-color: var(--muted-foreground);
+      transition: .2s ease;
       border-radius: 50%;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    }
+    input:checked + .toggle-slider {
+      background-color: var(--primary);
+      border-color: var(--primary);
+    }
+    input:checked + .toggle-slider:before {
+      transform: translateX(20px);
+      background-color: var(--primary-foreground);
     }
 
-    input:checked + .slider {
-      background-color: var(--warning);
-      box-shadow: 0 0 15px var(--warning-glow);
+    /* Tabular Nums */
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
     }
 
-    input:checked + .slider:before {
-      transform: translateX(24px);
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
     }
-
-    .pill-group {
-      display: flex;
-      gap: 6px;
-      background: rgba(10, 15, 26, 0.6);
-      padding: 4px;
-      border-radius: 10px;
-      border: 1px solid var(--border-glass);
-    }
-
-    .pill-btn {
-      flex: 1;
-      padding: 7px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      border-radius: 7px;
-      border: none;
+    ::-webkit-scrollbar-track {
       background: transparent;
-      color: var(--text-muted);
-      cursor: pointer;
-      text-align: center;
-      transition: all 0.2s ease;
-      white-space: nowrap;
     }
-
-    .pill-btn:hover {
-      color: var(--text-main);
+    ::-webkit-scrollbar-thumb {
+      background: oklch(1 0 0 / 15%);
+      border-radius: 3px;
     }
-
-    .pill-btn.active {
-      background: var(--bg-glass-elevated);
-      color: var(--primary);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    }
-
-    .status-banner {
-      margin-top: 14px;
-      padding: 10px 16px;
-      border-radius: 10px;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: rgba(56, 189, 248, 0.08);
-      border: 1px solid rgba(56, 189, 248, 0.25);
-      color: #bae6fd;
-    }
-
-    .status-banner.override-on {
-      background: rgba(245, 158, 11, 0.1);
-      border-color: rgba(245, 158, 11, 0.35);
-      color: #fde68a;
-    }
-
-    /* ACCOUNTS GRID (OBJECT CARDS) */
-    .accounts-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      gap: 20px;
-    }
-
-    .account-card {
-      background: var(--bg-glass-elevated);
-      border: 1px solid var(--border-glass);
-      border-radius: 16px;
-      padding: 20px;
-      position: relative;
-      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-
-    .account-card:hover {
-      transform: translateY(-3px);
-      border-color: rgba(255, 255, 255, 0.18);
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
-    }
-
-    .account-card.active {
-      border-color: rgba(16, 185, 129, 0.5);
-      box-shadow: 0 0 30px rgba(16, 185, 129, 0.2);
-      background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.85) 100%);
-    }
-
-    .account-card-header {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      margin-bottom: 16px;
-    }
-
-    .account-avatar {
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      border: 2px solid rgba(255, 255, 255, 0.15);
-      background: #1e293b;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      font-weight: 700;
-      color: #94a3b8;
-      overflow: hidden;
-      flex-shrink: 0;
-    }
-
-    .account-avatar img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .account-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .account-name {
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--text-main);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .account-email {
-      font-size: 12px;
-      color: var(--text-muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      font-family: var(--font-mono);
-    }
-
-    .tier-badge {
-      display: inline-block;
-      font-size: 10px;
-      font-weight: 700;
-      padding: 2px 7px;
-      border-radius: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-top: 4px;
-      background: rgba(56, 189, 248, 0.15);
-      color: #38bdf8;
-      border: 1px solid rgba(56, 189, 248, 0.3);
-    }
-
-    .active-badge {
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      font-size: 11px;
-      font-weight: 700;
-      padding: 4px 10px;
-      border-radius: 20px;
-      background: rgba(16, 185, 129, 0.2);
-      border: 1px solid rgba(16, 185, 129, 0.4);
-      color: #6ee7b7;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-    }
-
-    /* QUOTA METRICS */
-    .quota-section {
-      background: rgba(10, 15, 26, 0.6);
-      border-radius: 12px;
-      padding: 12px;
-      margin-bottom: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .quota-item {
-      margin-bottom: 10px;
-    }
-
-    .quota-item:last-child {
-      margin-bottom: 0;
-    }
-
-    .quota-label-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 12px;
-      margin-bottom: 6px;
-    }
-
-    .quota-name {
-      color: var(--text-muted);
-      font-weight: 500;
-    }
-
-    .quota-val {
-      font-weight: 700;
-      font-family: var(--font-mono);
-      color: var(--primary);
-    }
-
-    .progress-bar-bg {
-      height: 7px;
-      background: rgba(255, 255, 255, 0.08);
-      border-radius: 10px;
-      overflow: hidden;
-      position: relative;
-    }
-
-    .progress-bar-fill {
-      height: 100%;
-      border-radius: 10px;
-      background: linear-gradient(90deg, #10b981, #38bdf8);
-      box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
-      transition: width 0.4s ease;
-    }
-
-    .progress-bar-fill.warning {
-      background: linear-gradient(90deg, #f59e0b, #ef4444);
-      box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
-    }
-
-    .quota-meta {
-      font-size: 11px;
-      color: var(--text-dim);
-      margin-top: 4px;
-      display: flex;
-      justify-content: space-between;
-    }
-
-    .card-actions {
-      display: flex;
-      gap: 8px;
-    }
-
-    .btn {
-      padding: 8px 14px;
-      border-radius: 9px;
-      font-size: 12px;
-      font-weight: 600;
-      border: 1px solid var(--border-glass);
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      transition: all 0.2s ease;
-      background: var(--bg-card);
-      color: var(--text-main);
-    }
-
-    .btn:hover {
-      background: var(--bg-glass-elevated);
-      border-color: rgba(255, 255, 255, 0.2);
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #0ea5e9, #2563eb);
-      border: none;
-      color: white;
-      box-shadow: 0 2px 10px rgba(14, 165, 233, 0.3);
-    }
-
-    .btn-primary:hover {
-      box-shadow: 0 4px 16px rgba(14, 165, 233, 0.5);
-    }
-
-    .btn-success {
-      background: rgba(16, 185, 129, 0.15);
-      border-color: rgba(16, 185, 129, 0.4);
-      color: #6ee7b7;
-    }
-
-    .btn-success:hover {
-      background: rgba(16, 185, 129, 0.25);
-    }
-
-    .btn-danger {
-      background: rgba(239, 68, 68, 0.1);
-      border-color: rgba(239, 68, 68, 0.3);
-      color: #fca5a5;
-    }
-
-    .btn-danger:hover {
-      background: rgba(239, 68, 68, 0.2);
-    }
-
-    /* ADD ACCOUNT SPECIAL CARD */
-    .add-account-card {
-      background: rgba(15, 23, 42, 0.4);
-      border: 2px dashed rgba(255, 255, 255, 0.12);
-      border-radius: 16px;
-      padding: 30px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      min-height: 260px;
-    }
-
-    .add-account-card:hover {
-      background: rgba(20, 29, 51, 0.6);
-      border-color: var(--primary);
-      box-shadow: 0 0 25px var(--primary-glow);
-    }
-
-    .add-icon {
-      width: 52px;
-      height: 52px;
-      border-radius: 50%;
-      background: rgba(56, 189, 248, 0.1);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      color: var(--primary);
-      margin-bottom: 14px;
-    }
-
-    /* LIVE REQUESTS TABLE */
-    .table-container {
-      overflow-x: auto;
-      border-radius: 12px;
-      border: 1px solid var(--border-glass);
-      background: rgba(10, 15, 26, 0.5);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-
-    th, td {
-      padding: 12px 16px;
-      text-align: left;
-      border-bottom: 1px solid var(--border-glass);
-    }
-
-    th {
-      background: rgba(15, 23, 42, 0.8);
-      font-weight: 600;
-      color: var(--text-muted);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    tr:hover td {
-      background: rgba(255, 255, 255, 0.02);
-    }
-
-    .proc-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      padding: 4px 8px;
-      border-radius: 6px;
-      background: rgba(129, 140, 248, 0.15);
-      border: 1px solid rgba(129, 140, 248, 0.3);
-      color: #c7d2fe;
-    }
-
-    .override-pill {
-      font-size: 10px;
-      font-weight: 700;
-      padding: 2px 6px;
-      border-radius: 4px;
-      background: rgba(245, 158, 11, 0.2);
-      color: #fde68a;
-      border: 1px solid rgba(245, 158, 11, 0.4);
-      margin-left: 6px;
-    }
-
-    .cache-hit-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-weight: 700;
-      color: #34d399;
-      font-size: 12px;
-      font-family: var(--font-mono);
-    }
-
-    /* MODAL */
-    .modal-backdrop {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(8px);
-      z-index: 200;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-
-    .modal-backdrop.open {
-      display: flex;
-    }
-
-    .modal-box {
-      background: #0f172a;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 20px;
-      max-width: 520px;
-      width: 100%;
-      padding: 26px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
-      position: relative;
-    }
-
-    .modal-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-    }
-
-    .modal-title {
-      font-size: 18px;
-      font-weight: 700;
-    }
-
-    .modal-close {
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      font-size: 20px;
-      cursor: pointer;
-    }
-
-    .step-box {
-      background: rgba(15, 23, 42, 0.8);
-      border: 1px solid var(--border-glass);
-      border-radius: 12px;
-      padding: 14px;
-      margin-bottom: 12px;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-
-    .step-box code {
-      font-family: var(--font-mono);
-      background: #090d16;
-      padding: 2px 6px;
-      border-radius: 4px;
-      color: var(--primary);
-    }
-
-    /* TEST PLAYGROUND STYLES (PRESERVED) */
-    .playground-grid {
-      display: grid;
-      grid-template-columns: 460px 1fr;
-      gap: 20px;
-    }
-
-    @media (max-width: 1024px) {
-      .playground-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .form-group {
-      margin-bottom: 14px;
-    }
-
-    .form-label {
-      display: block;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-    }
-
-    input, select, textarea {
-      width: 100%;
-      background: #090d16;
-      border: 1px solid var(--border-glass);
-      border-radius: 8px;
-      padding: 9px 12px;
-      color: var(--text-main);
-      font-family: var(--font-sans);
-      font-size: 13px;
-      outline: none;
-      transition: all 0.2s;
-    }
-
-    input:focus, select:focus, textarea:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 10px var(--primary-glow);
-    }
-
-    textarea {
-      resize: vertical;
-      min-height: 100px;
-      font-family: var(--font-mono);
-      font-size: 12px;
-    }
-
-    .thought-container {
-      background: #090e18;
-      border: 1px solid rgba(129, 140, 248, 0.3);
-      border-radius: 10px;
-      margin-bottom: 16px;
-      display: none;
-      overflow: hidden;
-    }
-
-    .thought-container.visible {
-      display: block;
-    }
-
-    .thought-header {
-      background: rgba(129, 140, 248, 0.1);
-      padding: 8px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      color: #c7d2fe;
-      display: flex;
-      justify-content: space-between;
-      cursor: pointer;
-    }
-
-    .thought-body {
-      padding: 12px;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: #94a3b8;
-      max-height: 240px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-    }
-
-    .response-view {
-      background: #090d16;
-      border: 1px solid var(--border-glass);
-      border-radius: 12px;
-      padding: 18px;
-      min-height: 380px;
-      max-height: 700px;
-      overflow-y: auto;
-      font-size: 14px;
-      line-height: 1.7;
+    ::-webkit-scrollbar-thumb:hover {
+      background: oklch(1 0 0 / 25%);
     }
   </style>
 </head>
-<body>
+<body class="min-h-screen bg-background text-foreground antialiased selection:bg-primary selection:text-primary-foreground">
 
-  <!-- TOP NAV -->
-  <header>
-    <div class="brand">
-      <div class="brand-logo">⚡</div>
-      <div>
-        <div class="brand-title">Gemini AIP-136 Control Center</div>
-        <div class="brand-sub">Multi-Account Pro Vault & Protocol Gateway</div>
-      </div>
-    </div>
-
-    <div class="nav-actions">
-      <!-- Görünüm Seçici -->
-      <div class="view-toggle">
-        <button class="view-btn active" id="btnViewDashboard" onclick="switchView('dashboard')">
-          📊 Ana Dashboard
-        </button>
-        <button class="view-btn" id="btnViewPlayground" onclick="switchView('playground')">
-          🧪 Test Playground
-        </button>
-      </div>
-
-      <!-- WebSocket Durumu -->
-      <div class="ws-indicator" id="wsStatusBadge">
-        <div class="ws-dot" id="wsDot"></div>
-        <span id="wsText">Canlı Bağlantı</span>
-      </div>
-    </div>
-  </header>
-
-  <main>
-    <!-- TAB 1: ANA DASHBOARD -->
-    <div id="tabDashboard" class="tab-content active">
-
-      <!-- PANEL 1: ENJEKSİYON VE OVERRIDE KONTROLÜ -->
-      <div class="glass-panel">
-        <div class="panel-header">
-          <div class="panel-title">
-            <span class="icon">🎛️</span>
-            <span>Gateway Model & Düşünme Seviyesi Enjeksiyonu (Override Controller)</span>
-          </div>
-          <span style="font-size: 12px; color: var(--text-dim);">DSH ve 3. parti istemciler için global kural</span>
+  <div class="flex min-h-screen w-full">
+    
+    <!-- ========================================== -->
+    <!-- 1. APPSIDEBAR (shadcn/ui v4 Dashboard-01)  -->
+    <!-- ========================================== -->
+    <aside id="appSidebar" class="flex flex-col w-(--sidebar-width) shrink-0 border-r border-sidebar-border bg-sidebar transition-all duration-200">
+      
+      <!-- Sidebar Header / Logo -->
+      <div class="flex h-(--header-height) items-center gap-3 px-4 border-b border-sidebar-border">
+        <div class="size-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm shadow-xs">
+          ⚡
         </div>
-
-        <div class="override-grid">
-          <!-- 1. MOD SEÇİCİ ANAHTAR -->
-          <div class="switch-card" id="switchCard">
-            <label class="toggle-switch">
-              <input type="checkbox" id="toggleOverride" onchange="updateOverrideSettings()">
-              <span class="slider"></span>
-            </label>
-            <div>
-              <div style="font-weight: 700; font-size: 14px;" id="overrideModeLabel">Şeffaf Yönlendirme</div>
-              <div style="font-size: 11px; color: var(--text-muted);" id="overrideModeDesc">Gelen OpenAI Router isteğindeki modeli baz alır.</div>
-            </div>
-          </div>
-
-          <!-- 2. HEDEF MODEL -->
-          <div>
-            <div class="form-label">ZORLANACAK MODEL (OVERRIDE)</div>
-            <div class="pill-group" id="groupModel">
-              <button class="pill-btn" onclick="selectModel('gemini-3.8-flash-low')">Flash Low</button>
-              <button class="pill-btn active" onclick="selectModel('gemini-3.8-flash-medium')">Flash Medium</button>
-              <button class="pill-btn" onclick="selectModel('gemini-3.8-flash-high')">Flash High</button>
-            </div>
-          </div>
-
-          <!-- 3. DÜŞÜNME SEVİYESİ -->
-          <div>
-            <div class="form-label">DÜŞÜNME SEVİYESİ (THINKING EFFORT)</div>
-            <div class="pill-group" id="groupEffort">
-              <button class="pill-btn active" onclick="selectEffort('dynamic')">Dinamik</button>
-              <button class="pill-btn" onclick="selectEffort('high')">High (-1)</button>
-              <button class="pill-btn" onclick="selectEffort('low')">Low (1k)</button>
-              <button class="pill-btn" onclick="selectEffort('off')">Off (0)</button>
-            </div>
-          </div>
+        <div class="flex flex-col min-w-0 flex-1">
+          <div class="truncate text-sm font-semibold tracking-tight text-sidebar-foreground">Gemini Gateway</div>
+          <div class="truncate text-xs text-muted-foreground font-mono">AIP-136 Protocol</div>
         </div>
-
-        <!-- DURUM ROZETİ -->
-        <div class="status-banner" id="statusBanner">
-          <span id="bannerIcon">ℹ️</span>
-          <span id="bannerText">Şu an <strong>Şeffaf Mod</strong> aktif: Gelen OpenAI isteklerindeki model ve efor parametreleri olduğu gibi korunur.</span>
-        </div>
+        <span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-500/20">v2.0</span>
       </div>
 
-      <!-- PANEL 2: ÇOKLU PRO HESAP KASASI (MULTI-ACCOUNT CARDS) -->
-      <div class="glass-panel">
-        <div class="panel-header">
-          <div class="panel-title">
-            <span class="icon">👥</span>
-            <span>Gemini Pro Hesap Kasası (Multi-Account Vault)</span>
-          </div>
-          <button class="btn btn-primary" onclick="openAddAccountModal()">
-            ➕ Yeni Pro Hesap Ekle
+      <!-- Navigation Links -->
+      <div class="flex-1 overflow-y-auto px-3 py-4">
+        <div class="text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-3 mb-2">Yönetim Paneli</div>
+        <nav class="flex flex-col gap-1">
+          <button id="navDashboardBtn" onclick="switchNav('dashboard')" class="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-primary-foreground bg-primary transition-colors">
+            <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="14" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+            </svg>
+            <span>Ana Dashboard</span>
           </button>
-        </div>
+          
+          <button id="navPlaygroundBtn" onclick="switchNav('playground')" class="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
+            <svg class="size-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
+            </svg>
+            <span>Test Playground</span>
+          </button>
+        </nav>
 
-        <div class="accounts-grid" id="accountsGrid">
-          <!-- Hesap kartları JS ile dinamik doldurulur -->
-        </div>
-      </div>
+        <div class="text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-3 mt-6 mb-2">Hızlı Filtreler</div>
+        <nav class="flex flex-col gap-1">
+          <a href="#sectionAccounts" class="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
+            <svg class="size-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+            </svg>
+            <span>Pro Hesap Kasası</span>
+          </a>
+          <a href="#sectionOverride" class="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
+            <svg class="size-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+            </svg>
+            <span>Override Ayarları</span>
+          </a>
+          <a href="#sectionInspector" class="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
+            <svg class="size-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+            <span>Canlı PID Monitörü</span>
+          </a>
+        </nav>
 
-      <!-- PANEL 3: CANLI İSTEK VE PROGRAM (PID) İZLEYİCİ -->
-      <div class="glass-panel">
-        <div class="panel-header">
-          <div class="panel-title">
-            <span class="icon">📡</span>
-            <span>Canlı İstek ve Program (PID) İzleyicisi</span>
+        <div class="text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-3 mt-6 mb-2">Sistem Durumu</div>
+        <div class="px-3 py-2.5 rounded-lg bg-card border border-border flex flex-col gap-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-muted-foreground">HTTP Proxy</span>
+            <span class="font-mono text-emerald-400 font-medium">127.0.0.1:8000</span>
           </div>
-          <button class="btn" onclick="clearLiveRequests()">Geçmişi Temizle</button>
-        </div>
-
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Program / PID</th>
-                <th>Zaman</th>
-                <th>Protokol</th>
-                <th>İstek Modeli</th>
-                <th>Uygulanan Model</th>
-                <th>Düşünme</th>
-                <th>Gecikme</th>
-                <th>Token Kullanımı & Cache</th>
-                <th>Durum</th>
-              </tr>
-            </thead>
-            <tbody id="requestsTableBody">
-              <tr>
-                <td colspan="9" style="text-align: center; color: var(--text-dim); padding: 24px;">
-                  Henüz bir istek gelmedi. Gateway (Port 8000) dinlemede...
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-muted-foreground">Protokol</span>
+            <span class="font-mono text-foreground font-medium">AIP-136 / v1</span>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-muted-foreground">TLS Taklit</span>
+            <span class="text-xs text-foreground font-medium">Orijinal AGY</span>
+          </div>
         </div>
       </div>
+
+      <!-- Sidebar Footer / NavUser (shadcn/ui v4 style) -->
+      <div class="p-3 border-t border-sidebar-border">
+        <div id="sidebarUserPill" class="flex items-center gap-3 p-2 rounded-lg bg-sidebar-accent/50 border border-sidebar-border">
+          <div id="sideUserAvatar" class="size-8 rounded-full bg-muted flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden text-foreground">
+            G
+          </div>
+          <div class="flex flex-col min-w-0 flex-1">
+            <span id="sideUserName" class="truncate text-xs font-semibold text-foreground">İrem Eren</span>
+            <span id="sideUserEmail" class="truncate text-[11px] text-muted-foreground">iremeren1938@gmail.com</span>
+          </div>
+          <span class="size-2 rounded-full bg-emerald-400 shrink-0" title="Aktif Oturum"></span>
+        </div>
+      </div>
+
+    </aside>
+
+
+    <!-- ========================================== -->
+    <!-- 2. SIDEBAR INSET & SITE HEADER             -->
+    <!-- ========================================== -->
+    <div class="flex flex-1 flex-col min-w-0 overflow-y-auto">
+      
+      <!-- Sticky Site Header -->
+      <header class="sticky top-0 z-30 flex h-(--header-height) shrink-0 items-center justify-between border-b border-border bg-background/95 backdrop-blur-xs px-4 md:px-6">
+        
+        <!-- Sol: Breadcrumb & Başlık -->
+        <div class="flex items-center gap-3">
+          <button onclick="toggleSidebar()" class="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground md:hidden">
+            <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+          </button>
+          <div class="flex items-center gap-2 text-sm">
+            <span class="text-muted-foreground">Gateway</span>
+            <span class="text-muted-foreground">/</span>
+            <span id="headerBreadcrumb" class="font-medium text-foreground">Ana Dashboard</span>
+          </div>
+        </div>
+
+        <!-- Sağ: Status Pills & Hızlı Geçiş -->
+        <div class="flex items-center gap-3">
+          <!-- WebSocket Status Indicator -->
+          <div id="wsIndicator" class="flex items-center gap-2 px-3 py-1 rounded-full bg-card border border-border text-xs">
+            <span id="wsDot" class="size-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span id="wsText" class="font-mono text-muted-foreground">ws://127.0.0.1:8000/ws</span>
+          </div>
+
+          <!-- Quick Test Playground Toggle -->
+          <button onclick="switchNav('playground')" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-secondary text-secondary-foreground hover:bg-accent border border-border transition-colors">
+            <span>🧪 Test Et</span>
+          </button>
+
+          <!-- GitHub Repo -->
+          <a href="https://github.com/leoparPinnak/gemini-aip136-gateway" target="_blank" rel="noopener" class="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+            <svg class="size-4" fill="currentColor" viewBox="0 0 24 24">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+            </svg>
+          </a>
+        </div>
+      </header>
+
+
+      <!-- ========================================== -->
+      <!-- 3. MAIN CONTENT CONTAINER                  -->
+      <!-- ========================================== -->
+      <main class="flex-1 p-4 md:p-6 max-w-7xl w-full mx-auto flex flex-col gap-6">
+
+        <!-- ======================================== -->
+        <!-- VIEW A: ANA DASHBOARD                   -->
+        <!-- ======================================== -->
+        <div id="viewDashboard" class="flex flex-col gap-6">
+
+          <!-- A) METRIC SECTION CARDS (shadcn/ui v4 section-cards.tsx) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            <!-- Card 1: Aktif Hesap -->
+            <div class="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-xs">
+              <div class="flex items-center justify-between text-xs text-muted-foreground font-medium">
+                <span>Aktif Google Hesabı</span>
+                <span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-500/20">Aktif</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <div id="metricUserAvatar" class="size-10 rounded-full bg-muted flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden text-foreground">
+                  G
+                </div>
+                <div class="flex flex-col min-w-0">
+                  <div id="metricUserName" class="truncate font-semibold text-foreground text-sm">İrem Eren</div>
+                  <div id="metricUserEmail" class="truncate text-xs text-muted-foreground font-mono">iremeren1938@gmail.com</div>
+                </div>
+              </div>
+              <div class="text-[11px] text-muted-foreground border-t border-border pt-2 flex items-center justify-between">
+                <span>Plan:</span>
+                <span class="font-medium text-foreground" id="metricUserPlan">Google One AI Pro</span>
+              </div>
+            </div>
+
+            <!-- Card 2: 5 Saatlik Kota -->
+            <div class="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-xs">
+              <div class="flex items-center justify-between text-xs text-muted-foreground font-medium">
+                <span>5 Saatlik Rolling Kota</span>
+                <span class="font-mono text-xs text-foreground font-semibold" id="m5hPercent">%85 Kalan</span>
+              </div>
+              <div class="text-2xl font-semibold tabular-nums text-foreground" id="m5hLarge">85.4%</div>
+              <div class="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                <div id="m5hBar" class="bg-primary h-1.5 rounded-full transition-all duration-300" style="width: 85.4%;"></div>
+              </div>
+              <div class="text-[11px] text-muted-foreground flex items-center justify-between">
+                <span>Sıfırlanma:</span>
+                <span id="m5hReset" class="font-mono truncate max-w-[140px]">4h 28m kaldı</span>
+              </div>
+            </div>
+
+            <!-- Card 3: Haftalık Kota -->
+            <div class="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-xs">
+              <div class="flex items-center justify-between text-xs text-muted-foreground font-medium">
+                <span>Haftalık Toplam Kota</span>
+                <span class="font-mono text-xs text-foreground font-semibold" id="mWeekPercent">%98 Kalan</span>
+              </div>
+              <div class="text-2xl font-semibold tabular-nums text-foreground" id="mWeekLarge">97.5%</div>
+              <div class="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                <div id="mWeekBar" class="bg-primary h-1.5 rounded-full transition-all duration-300" style="width: 97.5%;"></div>
+              </div>
+              <div class="text-[11px] text-muted-foreground flex items-center justify-between">
+                <span>Kota Durumu:</span>
+                <span id="mWeekStatus" class="text-emerald-400 font-medium">Mükemmel</span>
+              </div>
+            </div>
+
+            <!-- Card 4: Gateway Override Durumu -->
+            <div class="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-xs">
+              <div class="flex items-center justify-between text-xs text-muted-foreground font-medium">
+                <span>Gateway Override</span>
+                <span id="metricOverrideBadge" class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground border border-border">Şeffaf</span>
+              </div>
+              <div class="flex flex-col">
+                <div id="metricOverrideModel" class="truncate font-semibold text-foreground text-sm font-mono">gemini-3.8-flash-medium</div>
+                <div id="metricOverrideEffort" class="truncate text-xs text-muted-foreground font-mono">Effort: dynamic</div>
+              </div>
+              <div class="text-[11px] text-muted-foreground border-t border-border pt-2 flex items-center justify-between">
+                <span>DSH Dinleme:</span>
+                <span class="font-mono text-foreground font-medium">:8000/v1</span>
+              </div>
+            </div>
+
+          </div>
+
+
+          <!-- B) İKİLİ ÇALIŞMA ALANI: HESAP KASASI & OVERRIDE DENETLEYİCİSİ -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- SOL: Google Pro Hesap Kasası (lg:col-span-7) -->
+            <section id="sectionAccounts" class="lg:col-span-7 flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-xs">
+              <div class="flex items-center justify-between border-b border-border pb-4">
+                <div class="flex flex-col gap-0.5">
+                  <h2 class="text-base font-semibold text-foreground">Google Pro Hesap Kasası</h2>
+                  <p class="text-xs text-muted-foreground">Elinizdeki Pro hesaplar arasında anında geçiş yapın. Kota tükenince sıradakine geçin.</p>
+                </div>
+                <button onclick="openAddAccountModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 shadow-xs transition-opacity">
+                  <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                  </svg>
+                  <span>Hesap Ekle</span>
+                </button>
+              </div>
+
+              <!-- Hesap Kartları Listesi -->
+              <div id="accountsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+                <!-- JavaScript ile doldurulur -->
+              </div>
+            </section>
+
+
+            <!-- SAĞ: Gateway Model & Düşünme Seviyesi Override Denetleyicisi (lg:col-span-5) -->
+            <section id="sectionOverride" class="lg:col-span-5 flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-xs">
+              <div class="flex flex-col gap-0.5 border-b border-border pb-4">
+                <div class="flex items-center justify-between">
+                  <h2 class="text-base font-semibold text-foreground">Model & Thinking Override</h2>
+                  <span id="overrideStatusPill" class="text-[10px] font-mono px-2 py-0.5 rounded border border-border text-muted-foreground">KAPALI</span>
+                </div>
+                <p class="text-xs text-muted-foreground">DSH veya IDE'den gelen OpenAI isteklerini gateway seviyesinde ezerek zorunlu modele yönlendirin.</p>
+              </div>
+
+              <!-- Override Switch -->
+              <div class="flex items-center justify-between p-3 rounded-lg bg-background border border-border">
+                <div class="flex flex-col gap-0.5">
+                  <span class="text-sm font-medium text-foreground">Zorunlu Gateway Override</span>
+                  <span class="text-xs text-muted-foreground">Açıldığında istemcinin istediği model yok sayılır.</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="chkOverride" onchange="toggleOverrideSetting()">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <!-- Hedef Model Seçimi -->
+              <div class="flex flex-col gap-2">
+                <label class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Hedef Model (Target Model)</label>
+                <div class="grid grid-cols-2 gap-2" id="groupTargetModel">
+                  <button onclick="setTargetModel('gemini-3.8-flash-high')" data-model="gemini-3.8-flash-high" class="model-btn flex flex-col items-start p-2.5 rounded-lg border border-border bg-background hover:bg-muted text-left transition-colors">
+                    <span class="text-xs font-semibold text-foreground font-mono">Flash High</span>
+                    <span class="text-[11px] text-muted-foreground">gemini-3.8-flash-high</span>
+                  </button>
+                  <button onclick="setTargetModel('gemini-3.8-flash-medium')" data-model="gemini-3.8-flash-medium" class="model-btn flex flex-col items-start p-2.5 rounded-lg border border-border bg-background hover:bg-muted text-left transition-colors">
+                    <span class="text-xs font-semibold text-foreground font-mono">Flash Medium</span>
+                    <span class="text-[11px] text-muted-foreground">gemini-3.8-flash-medium</span>
+                  </button>
+                  <button onclick="setTargetModel('gemini-3.8-flash-low')" data-model="gemini-3.8-flash-low" class="model-btn flex flex-col items-start p-2.5 rounded-lg border border-border bg-background hover:bg-muted text-left transition-colors">
+                    <span class="text-xs font-semibold text-foreground font-mono">Flash Low</span>
+                    <span class="text-[11px] text-muted-foreground">gemini-3.8-flash-low</span>
+                  </button>
+                  <button onclick="setTargetModel('gemini-2.5-pro')" data-model="gemini-2.5-pro" class="model-btn flex flex-col items-start p-2.5 rounded-lg border border-border bg-background hover:bg-muted text-left transition-colors">
+                    <span class="text-xs font-semibold text-foreground font-mono">Gemini 2.5 Pro</span>
+                    <span class="text-[11px] text-muted-foreground">gemini-2.5-pro</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Düşünme Seviyesi (Thinking Effort) -->
+              <div class="flex flex-col gap-2">
+                <label class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Düşünme Seviyesi (Thinking Effort)</label>
+                <div class="grid grid-cols-4 gap-1.5" id="groupThinkingEffort">
+                  <button onclick="setThinkingEffort('dynamic')" data-effort="dynamic" class="effort-btn py-1.5 px-2 rounded-md border border-border bg-background text-xs font-medium text-center hover:bg-muted transition-colors">
+                    Dinamik
+                  </button>
+                  <button onclick="setThinkingEffort('high')" data-effort="high" class="effort-btn py-1.5 px-2 rounded-md border border-border bg-background text-xs font-medium text-center hover:bg-muted transition-colors">
+                    High (-1)
+                  </button>
+                  <button onclick="setThinkingEffort('low')" data-effort="low" class="effort-btn py-1.5 px-2 rounded-md border border-border bg-background text-xs font-medium text-center hover:bg-muted transition-colors">
+                    Low (1k)
+                  </button>
+                  <button onclick="setThinkingEffort('off')" data-effort="off" class="effort-btn py-1.5 px-2 rounded-md border border-border bg-background text-xs font-medium text-center hover:bg-muted transition-colors">
+                    Off (0)
+                  </button>
+                </div>
+              </div>
+
+              <!-- Bilgi Bildirimi -->
+              <div id="overrideBanner" class="p-3 rounded-lg border border-border bg-background/50 text-xs flex items-start gap-2.5">
+                <span class="size-4 shrink-0 text-muted-foreground">ℹ️</span>
+                <span id="overrideBannerText" class="text-muted-foreground">Şu an <strong>Şeffaf Mod</strong> devrede: İstemcinin ilettiği model ve efor parametreleri olduğu gibi korunur.</span>
+              </div>
+            </section>
+
+          </div>
+
+
+          <!-- C) CANLI İSTEK VE SÜREÇ (PID) MONİTÖRÜ (shadcn/ui v4 data-table.tsx) -->
+          <section id="sectionInspector" class="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-xs">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
+              <div class="flex flex-col gap-0.5">
+                <div class="flex items-center gap-2">
+                  <h2 class="text-base font-semibold text-foreground">Canlı İstek & Yerel Süreç (PID) Monitörü</h2>
+                  <span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-500/20">Canlı TCP Dinleme</span>
+                </div>
+                <p class="text-xs text-muted-foreground">Gateway'e bağlanan Windows uygulamalarının PID bilgileri ve enjekte edilen model telemetrisi.</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="clearRequestsTable()" class="px-2.5 py-1 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-colors">
+                  Temizle
+                </button>
+              </div>
+            </div>
+
+            <!-- Tablo Kapsayıcısı -->
+            <div class="w-full overflow-x-auto rounded-lg border border-border">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-muted/50 border-b border-border text-muted-foreground font-medium uppercase tracking-wider text-[11px]">
+                  <tr>
+                    <th class="px-4 py-2.5">Kaynak Program / PID</th>
+                    <th class="px-4 py-2.5">Zaman</th>
+                    <th class="px-4 py-2.5">Endpoint</th>
+                    <th class="px-4 py-2.5">İstenen Model</th>
+                    <th class="px-4 py-2.5">Gateway Modeli</th>
+                    <th class="px-4 py-2.5">Thinking</th>
+                    <th class="px-4 py-2.5">Gecikme</th>
+                    <th class="px-4 py-2.5">Token & Cache</th>
+                    <th class="px-4 py-2.5">Durum</th>
+                  </tr>
+                </thead>
+                <tbody id="requestsTableBody" class="divide-y divide-border">
+                  <tr>
+                    <td colspan="9" class="px-4 py-8 text-center text-muted-foreground">
+                      Henüz bir istek gelmedi. Gateway (Port 8000) dinlemede...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+        </div>
+
+
+        <!-- ======================================== -->
+        <!-- VIEW B: TEST PLAYGROUND                 -->
+        <!-- ======================================== -->
+        <div id="viewPlayground" class="hidden flex flex-col gap-6">
+          
+          <div class="flex items-center justify-between border-b border-border pb-4">
+            <div class="flex flex-col gap-0.5">
+              <h2 class="text-lg font-semibold text-foreground">Gemini AIP-136 Test Laboratuvarı</h2>
+              <p class="text-xs text-muted-foreground">İstekleri doğrudan gateway üzerinden gönderin, reasoning stream akışını ve cache hit davranışını test edin.</p>
+            </div>
+            <button id="btnLoadCacheTest" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors">
+              <span>⚡ 25k Cache Test Yükle</span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- SOL: İstek Parametreleri (lg:col-span-5) -->
+            <div class="lg:col-span-5 flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-xs">
+              <div class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">İstek Konfigürasyonu</div>
+              
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-medium text-foreground">API Protokolü & Endpoint</label>
+                <select id="playEndpoint" class="w-full bg-background border border-border rounded-md px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
+                  <option value="/v1/chat/completions">/v1/chat/completions (OpenAI Chat API)</option>
+                  <option value="/v1/responses">/v1/responses (OpenAI Responses API)</option>
+                </select>
+              </div>
+
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-medium text-foreground">Hedef Model</label>
+                <select id="playModel" class="w-full bg-background border border-border rounded-md px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
+                  <option value="gemini-3.8-flash-high">gemini-3.8-flash-high</option>
+                  <option value="gemini-3.8-flash-medium" selected>gemini-3.8-flash-medium</option>
+                  <option value="gemini-3.8-flash-low">gemini-3.8-flash-low</option>
+                  <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                </select>
+              </div>
+
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-medium text-foreground">Düşünme Seviyesi (Reasoning Effort)</label>
+                <select id="playEffort" class="w-full bg-background border border-border rounded-md px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
+                  <option value="default">Varsayılan (Dinamik)</option>
+                  <option value="high">high (-1 bütçe)</option>
+                  <option value="low">low (1.000 bütçe)</option>
+                  <option value="off">off (0 / düşünme kapalı)</option>
+                </select>
+              </div>
+
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-medium text-foreground">Sistem İstemi (System Prompt)</label>
+                <textarea id="playSystemPrompt" rows="3" placeholder="Sistem talimatları (opsiyonel)..." class="w-full bg-background border border-border rounded-md p-2.5 text-xs text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-none"></textarea>
+              </div>
+
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-medium text-foreground">Kullanıcı Mesajı</label>
+                <textarea id="playUserPrompt" rows="4" placeholder="Modelden ne istiyorsunuz?..." class="w-full bg-background border border-border rounded-md p-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none">Merhaba! Hangi modeli çalıştırıyorsun ve düşünme mekanizman nasıl işliyor?</textarea>
+              </div>
+
+              <div class="flex items-center gap-2 pt-2">
+                <button id="btnPlaySend" onclick="sendPlaygroundRequest()" class="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 shadow-xs transition-opacity">
+                  <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                  <span>İstek Gönder (Streaming)</span>
+                </button>
+                <button id="btnPlayStop" onclick="stopPlaygroundRequest()" class="hidden inline-flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-md text-xs font-medium bg-destructive text-destructive-foreground hover:opacity-90 transition-opacity">
+                  <span>Durdur</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- SAĞ: Model Yanıtı ve Telemetri (lg:col-span-7) -->
+            <div class="lg:col-span-7 flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-xs">
+              
+              <!-- Telemetri Barı -->
+              <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+                <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Model Çıktısı</span>
+                <div class="flex items-center gap-4 text-xs font-mono">
+                  <span class="text-muted-foreground">Süre: <strong id="mDuration" class="text-foreground tabular-nums font-semibold">-</strong></span>
+                  <span class="text-muted-foreground">Prompt: <strong id="mPrompt" class="text-foreground tabular-nums font-semibold">0</strong></span>
+                  <span class="text-muted-foreground">Cache: <strong id="mCache" class="text-emerald-400 tabular-nums font-semibold">0</strong></span>
+                  <span class="text-muted-foreground">Çıktı: <strong id="mOutput" class="text-foreground tabular-nums font-semibold">0</strong></span>
+                </div>
+              </div>
+
+              <!-- Katlanabilir Düşünce Süreci (Chain of Thought) -->
+              <div id="playThoughtContainer" class="hidden flex flex-col rounded-lg border border-border bg-background overflow-hidden">
+                <button onclick="toggleThoughtBox()" class="flex items-center justify-between px-3 py-2 bg-muted/40 border-b border-border text-xs font-medium text-foreground hover:bg-muted/70 transition-colors">
+                  <div class="flex items-center gap-2">
+                    <span class="size-2 rounded-full bg-violet-400 animate-pulse"></span>
+                    <span>Modelin Düşünce Süreci (Chain-of-Thought)</span>
+                  </div>
+                  <span id="thoughtToggleArrow" class="text-muted-foreground">▼ Daralt</span>
+                </button>
+                <div id="playThoughtBody" class="p-3 text-xs font-mono text-muted-foreground max-h-60 overflow-y-auto whitespace-pre-wrap leading-relaxed"></div>
+              </div>
+
+              <!-- Yanıt İçerik Alanı -->
+              <div id="playResponseView" class="flex-1 min-h-[420px] max-h-[700px] overflow-y-auto p-4 rounded-lg bg-background border border-border text-sm leading-relaxed prose prose-invert max-w-none">
+                <div class="flex h-full items-center justify-center text-muted-foreground text-xs">
+                  İstek gönderildiğinde modelin cevabı burada gerçek zamanlı akacaktır...
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </main>
 
     </div>
 
-    <!-- TAB 2: TEST PLAYGROUND (MEVCUT TEST KONSOLU) -->
-    <div id="tabPlayground" class="tab-content">
-      <div class="playground-grid">
-        <!-- SOL PANEL: İstek Konfigürasyonu -->
-        <div class="glass-panel" style="margin-bottom: 0;">
-          <div class="panel-header">
-            <div class="panel-title">⚙️ Playground Ayarları</div>
-            <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;" id="btnLoadCacheTest">⚡ Cache Test Yükle (25k)</button>
-          </div>
+  </div>
 
-          <div class="form-group">
-            <label class="form-label">Uç Nokta</label>
-            <select id="playEndpoint">
-              <option value="/v1/chat/completions">/v1/chat/completions (Chat)</option>
-              <option value="/v1/responses">/v1/responses (Responses API)</option>
-            </select>
-          </div>
 
-          <div class="form-group">
-            <label class="form-label">Model</label>
-            <select id="playModel">
-              <option value="gemini-3.8-flash-medium">gemini-3.8-flash-medium</option>
-              <option value="gemini-3.8-flash-high">gemini-3.8-flash-high</option>
-              <option value="gemini-3.8-flash-low">gemini-3.8-flash-low</option>
-            </select>
-          </div>
+  <!-- ========================================== -->
+  <!-- 4. MODAL: YENİ HESAP EKLEME DİYALOĞU       -->
+  <!-- ========================================== -->
+  <div id="addAccountModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+    <div class="flex flex-col gap-4 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-lg animate-in fade-in zoom-in-95 duration-150">
+      
+      <div class="flex items-center justify-between border-b border-border pb-3">
+        <div class="flex flex-col gap-0.5">
+          <h3 class="text-base font-semibold text-foreground">Yeni Google Pro Hesap Ekle</h3>
+          <p class="text-xs text-muted-foreground">Windows Credential Manager ile güvenli içe aktarma</p>
+        </div>
+        <button onclick="closeAddAccountModal()" class="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted">
+          <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
 
-          <div class="form-group">
-            <label class="form-label">Reasoning Effort</label>
-            <select id="playEffort">
-              <option value="default">Varsayılan (Dinamik)</option>
-              <option value="high">high (-1)</option>
-              <option value="low">low (1000)</option>
-              <option value="off">off (0)</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Sistem İstemi</label>
-            <textarea id="playSystemPrompt" placeholder="Sistem istemi (boş bırakılırsa enjeksiyon yapılmaz)..."></textarea>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Kullanıcı Mesajı</label>
-            <textarea id="playUserPrompt" placeholder="Mesajınızı buraya yazın..." style="min-height: 70px;">Merhaba, kimsin ve hangi modeli kullanıyorsun?</textarea>
-          </div>
-
-          <div style="display: flex; gap: 8px;">
-            <button class="btn btn-primary" id="btnPlaySend" style="flex: 1; padding: 10px;" onclick="sendPlaygroundRequest()">
-              ▶ Gönder (Streaming)
-            </button>
-            <button class="btn btn-danger" id="btnPlayStop" style="display: none;" onclick="stopPlaygroundRequest()">
-              ⏹ Durdur
-            </button>
+      <div class="flex flex-col gap-3 text-xs">
+        <div class="p-3 rounded-lg border border-border bg-background flex flex-col gap-1.5">
+          <span class="font-medium text-foreground">Adım 1: Terminalde Yeni Hesapla Giriş Yapın</span>
+          <p class="text-muted-foreground">PowerShell veya CMD penceresinde şu komutu çalıştırarak eklemek istediğiniz Google hesabıyla oturum açın:</p>
+          <div class="p-2 rounded bg-muted font-mono text-[11px] text-foreground flex items-center justify-between">
+            <span>agy auth login</span>
+            <button onclick="navigator.clipboard.writeText('agy auth login')" class="text-muted-foreground hover:text-foreground text-[10px] uppercase font-bold">Kopyala</button>
           </div>
         </div>
 
-        <!-- SAĞ PANEL: Yanıt ve Çıktı -->
-        <div class="glass-panel" style="margin-bottom: 0;">
-          <div class="panel-header">
-            <div class="panel-title">💬 Model Çıktısı</div>
-            <div style="display: flex; gap: 14px; font-size: 12px; font-family: var(--font-mono); color: var(--text-muted);">
-              <span>Süre: <strong id="mDuration" style="color: var(--text-main);">-</strong></span>
-              <span>Prompt: <strong id="mPrompt" style="color: var(--text-main);">0</strong></span>
-              <span>Cache: <strong id="mCache" style="color: var(--success);">0 ⚡</strong></span>
-              <span>Output: <strong id="mOutput" style="color: var(--text-main);">0</strong></span>
-            </div>
-          </div>
+        <div class="p-3 rounded-lg border border-border bg-background flex flex-col gap-1">
+          <span class="font-medium text-foreground">Adım 2: Tarayıcıda Onaylayın</span>
+          <p class="text-muted-foreground">Açılan Google yetkilendirme penceresinde Pro hesabınızı seçip erişim iznini onaylayın.</p>
+        </div>
 
-          <!-- Düşünme Kutusu -->
-          <div class="thought-container" id="playThoughtContainer">
-            <div class="thought-header" onclick="toggleThoughtBox()">
-              <span>🧠 Modelin Düşünce Süreci (Chain-of-Thought)</span>
-              <span id="thoughtToggleArrow">▼ Daralt</span>
-            </div>
-            <div class="thought-body" id="playThoughtBody"></div>
-          </div>
-
-          <!-- Yanıt Alanı -->
-          <div class="response-view" id="playResponseView">
-            <div style="display: flex; height: 100%; align-items: center; justify-content: center; color: var(--text-dim);">
-              İstek gönderildiğinde modelin cevabı ve düşünceleri burada canlı akacak...
-            </div>
-          </div>
+        <div class="p-3 rounded-lg border border-border bg-background flex flex-col gap-1">
+          <span class="font-medium text-foreground">Adım 3: Kasaya İçe Aktarın</span>
+          <p class="text-muted-foreground">Oturum açıldıktan sonra aşağıdaki butona tıklayın. Gateway yeni oturumu mevcut hesapların yanına ekler.</p>
         </div>
       </div>
-    </div>
-  </main>
 
-  <!-- YENİ HESAP EKLEME MODALI -->
-  <div class="modal-backdrop" id="addAccountModal">
-    <div class="modal-box">
-      <div class="modal-header">
-        <div class="modal-title">➕ Yeni Pro Hesap Ekle</div>
-        <button class="modal-close" onclick="closeAddAccountModal()">&times;</button>
+      <div class="flex items-center gap-2 pt-2">
+        <button onclick="importWindowsAccount()" class="flex-1 inline-flex items-center justify-center gap-2 py-2 px-4 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 shadow-xs transition-opacity">
+          <span>📥 Windows Oturumunu İçe Aktar</span>
+        </button>
+        <button onclick="closeAddAccountModal()" class="py-2 px-3 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-colors">
+          İptal
+        </button>
       </div>
 
-      <div class="step-box">
-        <strong style="color: var(--primary);">Adım 1:</strong> Terminalinizde (PowerShell/CMD) çıkış yapıp yeni Google hesabınızla giriş yapın:
-        <pre style="margin-top: 6px; padding: 6px; background: #060911; border-radius: 6px; color: #38bdf8;">agy auth login</pre>
-      </div>
-
-      <div class="step-box">
-        <strong style="color: var(--primary);">Adım 2:</strong> Tarayıcıda açılan ekranda yeni Pro Google hesabınızı onaylayın.
-      </div>
-
-      <div class="step-box">
-        <strong style="color: var(--primary);">Adım 3:</strong> Oturum açma tamamlandıktan sonra aşağıdaki butona tıklayın. Gateway yeni oturumu mevcut hesapların yanına <strong>yeni bir kart olarak</strong> ekleyecektir:
-      </div>
-
-      <button class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="importWindowsAccount()">
-        📥 Windows'taki Yeni Girişi İçe Aktar
-      </button>
     </div>
   </div>
 
+
+  <!-- ========================================== -->
+  <!-- 5. JAVASCRIPT & WEBSOCKET ENGINE           -->
+  <!-- ========================================== -->
   <script>
-    // GLOBAL STATE
+    // State Store
     let currentAccounts = [];
-    let activeAccountId = null;
     let overrideSettings = {
       override_enabled: false,
       target_model: "gemini-3.8-flash-medium",
       thinking_effort: "dynamic"
     };
-
     let ws = null;
     let playAbortController = null;
 
-    // GÖRÜNÜM DEĞİŞTİRME
-    function switchView(viewName) {
-      document.getElementById('tabDashboard').classList.toggle('active', viewName === 'dashboard');
-      document.getElementById('tabPlayground').classList.toggle('active', viewName === 'playground');
-      document.getElementById('btnViewDashboard').classList.toggle('active', viewName === 'dashboard');
-      document.getElementById('btnViewPlayground').classList.toggle('active', viewName === 'playground');
+    // 1. Navigation Switcher
+    function switchNav(viewName) {
+      const isDash = viewName === 'dashboard';
+      document.getElementById('viewDashboard').classList.toggle('hidden', !isDash);
+      document.getElementById('viewPlayground').classList.toggle('hidden', isDash);
+      
+      const btnDash = document.getElementById('navDashboardBtn');
+      const btnPlay = document.getElementById('navPlaygroundBtn');
+      
+      if (isDash) {
+        btnDash.className = "flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-primary-foreground bg-primary transition-colors";
+        btnPlay.className = "flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors";
+        document.getElementById('headerBreadcrumb').textContent = "Ana Dashboard";
+      } else {
+        btnDash.className = "flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors";
+        btnPlay.className = "flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-primary-foreground bg-primary transition-colors";
+        document.getElementById('headerBreadcrumb').textContent = "Test Playground";
+      }
     }
 
-    // WEBSOCKET BAĞLANTISI
+    function toggleSidebar() {
+      const sb = document.getElementById('appSidebar');
+      sb.classList.toggle('hidden');
+    }
+
+    // 2. WebSocket Connection
     function connectWebSocket() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws`;
-
+      
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        document.getElementById('wsDot').classList.remove('offline');
-        document.getElementById('wsText').textContent = 'Canlı Bağlantı';
+        document.getElementById('wsDot').className = "size-2 rounded-full bg-emerald-400 animate-pulse";
+        document.getElementById('wsText').textContent = "Canlı Bağlantı";
       };
 
       ws.onclose = () => {
-        document.getElementById('wsDot').classList.add('offline');
-        document.getElementById('wsText').textContent = 'Yeniden Bağlanıyor...';
-        setTimeout(connectWebSocket, 3000);
+        document.getElementById('wsDot').className = "size-2 rounded-full bg-destructive";
+        document.getElementById('wsText').textContent = "Yeniden Bağlanıyor...";
+        setTimeout(connectWebSocket, 2500);
       };
 
       ws.onerror = () => {
@@ -1187,166 +810,138 @@
       }
     }
 
-    // OVERRIDE KONTROLLERİ
-    function applySettingsToUI() {
-      const toggle = document.getElementById('toggleOverride');
-      const switchCard = document.getElementById('switchCard');
-      const modeLabel = document.getElementById('overrideModeLabel');
-      const modeDesc = document.getElementById('overrideModeDesc');
-      const banner = document.getElementById('statusBanner');
-      const bannerText = document.getElementById('bannerText');
-
-      toggle.checked = overrideSettings.override_enabled;
-      switchCard.classList.toggle('active-override', overrideSettings.override_enabled);
-
-      if (overrideSettings.override_enabled) {
-        modeLabel.textContent = '⚡ Gateway Zorunlu Override';
-        modeLabel.style.color = 'var(--warning)';
-        modeDesc.textContent = 'OpenAI isteklerindeki model & efor çöpe atılır, seçilen değerler zorlanır.';
-        banner.className = 'status-banner override-on';
-        bannerText.innerHTML = `⚠️ <strong>Override Aktif:</strong> Tüm gelen DSH / OpenAI isteklerine zorla <strong>${overrideSettings.target_model}</strong> + <strong>${overrideSettings.thinking_effort}</strong> uygulanıyor!`;
-      } else {
-        modeLabel.textContent = 'Şeffaf Yönlendirme';
-        modeLabel.style.color = 'var(--text-main)';
-        modeDesc.textContent = 'Gelen OpenAI Router isteğindeki modeli baz alır.';
-        banner.className = 'status-banner';
-        bannerText.innerHTML = `ℹ️ Şu an <strong>Şeffaf Mod</strong> aktif: Gelen isteklerdeki model ve efor parametreleri olduğu gibi korunur.`;
-      }
-
-      // Pill seçimleri
-      document.querySelectorAll('#groupModel .pill-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('onclick').includes(overrideSettings.target_model));
-      });
-      document.querySelectorAll('#groupEffort .pill-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('onclick').includes(overrideSettings.thinking_effort));
-      });
-    }
-
-    function updateOverrideSettings() {
-      overrideSettings.override_enabled = document.getElementById('toggleOverride').checked;
-      saveSettings();
-    }
-
-    function selectModel(modelName) {
-      overrideSettings.target_model = modelName;
-      saveSettings();
-    }
-
-    function selectEffort(effort) {
-      overrideSettings.thinking_effort = effort;
-      saveSettings();
-    }
-
-    function saveSettings() {
-      fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(overrideSettings)
-      }).then(res => res.json()).then(data => {
-        applySettingsToUI();
-      });
-    }
-
-    // HESAPLARI ÇİZ
+    // 3. Render Multi-Account Vault Cards
     function renderAccounts() {
-      const grid = document.getElementById('accountsGrid');
-      grid.innerHTML = '';
+      const container = document.getElementById('accountsContainer');
+      container.innerHTML = '';
+
+      let activeAcc = currentAccounts.find(a => a.is_active) || currentAccounts[0];
+
+      if (activeAcc) {
+        // Update Sidebar and Metric Cards
+        document.getElementById('sideUserName').textContent = activeAcc.name || 'Pro Kullanıcı';
+        document.getElementById('sideUserEmail').textContent = activeAcc.email || '-';
+        document.getElementById('metricUserName').textContent = activeAcc.name || 'Pro Kullanıcı';
+        document.getElementById('metricUserEmail').textContent = activeAcc.email || '-';
+        document.getElementById('metricUserPlan').textContent = activeAcc.plan_type || 'Google One AI Pro';
+
+        const avatarMarkup = activeAcc.picture 
+          ? `<img src="${activeAcc.picture}" alt="${activeAcc.name}" class="size-full object-cover">`
+          : (activeAcc.name ? activeAcc.name.charAt(0).toUpperCase() : 'G');
+        
+        document.getElementById('sideUserAvatar').innerHTML = avatarMarkup;
+        document.getElementById('metricUserAvatar').innerHTML = avatarMarkup;
+
+        // Quota values
+        let f5h = 100;
+        let f5hDesc = 'Sıfırlanma: -';
+        if (activeAcc.quota && activeAcc.quota.gemini_5h) {
+          f5h = Math.round(activeAcc.quota.gemini_5h.remaining_fraction * 100);
+          f5hDesc = activeAcc.quota.gemini_5h.description || activeAcc.quota.gemini_5h.reset_time || '-';
+        }
+        document.getElementById('m5hPercent').textContent = `%${f5h} Kalan`;
+        document.getElementById('m5hLarge').textContent = `${f5h}%`;
+        document.getElementById('m5hBar').style.width = `${f5h}%`;
+        document.getElementById('m5hReset').textContent = f5hDesc;
+
+        let fWk = 100;
+        if (activeAcc.quota && activeAcc.quota.gemini_weekly) {
+          fWk = Math.round(activeAcc.quota.gemini_weekly.remaining_fraction * 100);
+        }
+        document.getElementById('mWeekPercent').textContent = `%${fWk} Kalan`;
+        document.getElementById('mWeekLarge').textContent = `${fWk}%`;
+        document.getElementById('mWeekBar').style.width = `${fWk}%`;
+      }
 
       currentAccounts.forEach(acc => {
         const card = document.createElement('div');
-        card.className = `account-card ${acc.is_active ? 'active' : ''}`;
+        const isActive = acc.is_active;
+        card.className = `flex flex-col justify-between p-4 rounded-xl border bg-background transition-all ${isActive ? 'border-primary ring-1 ring-primary/30 shadow-xs' : 'border-border hover:border-muted-foreground/30'}`;
 
-        // Kota hesaplamaları
-        let fiveHourPercent = 100;
+        let fiveHourVal = 100;
         let fiveHourReset = '-';
         if (acc.quota && acc.quota.gemini_5h) {
-          fiveHourPercent = Math.round(acc.quota.gemini_5h.remaining_fraction * 100);
+          fiveHourVal = Math.round(acc.quota.gemini_5h.remaining_fraction * 100);
           fiveHourReset = acc.quota.gemini_5h.description || acc.quota.gemini_5h.reset_time || '-';
         }
 
-        let weeklyPercent = 100;
-        let weeklyReset = '-';
+        let weeklyVal = 100;
         if (acc.quota && acc.quota.gemini_weekly) {
-          weeklyPercent = Math.round(acc.quota.gemini_weekly.remaining_fraction * 100);
-          weeklyReset = acc.quota.gemini_weekly.description || acc.quota.gemini_weekly.reset_time || '-';
+          weeklyVal = Math.round(acc.quota.gemini_weekly.remaining_fraction * 100);
         }
 
         const avatarContent = acc.picture 
-          ? `<img src="${acc.picture}" alt="${acc.name}">`
+          ? `<img src="${acc.picture}" alt="${acc.name}" class="size-full object-cover">`
           : (acc.name ? acc.name.charAt(0).toUpperCase() : 'G');
 
         card.innerHTML = `
-          <div>
-            ${acc.is_active ? '<div class="active-badge">🟢 AKTİF HESAP</div>' : ''}
-            <div class="account-card-header">
-              <div class="account-avatar">${avatarContent}</div>
-              <div class="account-info">
-                <div class="account-name" title="${acc.name}">${acc.name}</div>
-                <div class="account-email" title="${acc.email}">${acc.email}</div>
-                <span class="tier-badge">⭐ ${acc.plan_type || 'PRO TIER'}</span>
+          <div class="flex flex-col gap-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <div class="size-8 rounded-full bg-muted flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden text-foreground">
+                  ${avatarContent}
+                </div>
+                <div class="flex flex-col min-w-0">
+                  <span class="truncate text-xs font-semibold text-foreground" title="${acc.name}">${acc.name}</span>
+                  <span class="truncate text-[11px] text-muted-foreground font-mono" title="${acc.email}">${acc.email}</span>
+                </div>
               </div>
+              ${isActive ? `
+                <span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 border border-emerald-500/20 shrink-0">
+                  Aktif
+                </span>
+              ` : `
+                <button onclick="setActiveAccount('${acc.id}')" class="px-2 py-0.5 rounded text-[10px] font-medium bg-secondary text-secondary-foreground hover:bg-accent border border-border shrink-0 transition-colors">
+                  Geç
+                </button>
+              `}
             </div>
 
-            <!-- KOTA BİLGİLERİ -->
-            <div class="quota-section">
-              <div class="quota-item">
-                <div class="quota-label-row">
-                  <span class="quota-name">5 Saatlik Limit</span>
-                  <span class="quota-val" style="color: ${fiveHourPercent < 20 ? '#ef4444' : (fiveHourPercent < 50 ? '#f59e0b' : '#10b981')}">%${fiveHourPercent} Kalan</span>
+            <!-- Kota Çubukları -->
+            <div class="flex flex-col gap-2 pt-1 border-t border-border">
+              <div class="flex flex-col gap-1">
+                <div class="flex items-center justify-between text-[11px]">
+                  <span class="text-muted-foreground">5 Saatlik Limit</span>
+                  <span class="font-mono font-medium ${fiveHourVal < 25 ? 'text-destructive' : 'text-foreground'}">%${fiveHourVal}</span>
                 </div>
-                <div class="progress-bar-bg">
-                  <div class="progress-bar-fill ${fiveHourPercent < 30 ? 'warning' : ''}" style="width: ${fiveHourPercent}%;"></div>
-                </div>
-                <div class="quota-meta">
-                  <span>Sıfırlanma:</span>
-                  <span title="${fiveHourReset}">${fiveHourReset.length > 32 ? fiveHourReset.slice(0, 32) + '...' : fiveHourReset}</span>
+                <div class="w-full bg-muted rounded-full h-1 overflow-hidden">
+                  <div class="h-1 rounded-full ${fiveHourVal < 25 ? 'bg-destructive' : 'bg-primary'}" style="width: ${fiveHourVal}%;"></div>
                 </div>
               </div>
 
-              <div class="quota-item" style="margin-top: 10px;">
-                <div class="quota-label-row">
-                  <span class="quota-name">Haftalık Limit</span>
-                  <span class="quota-val" style="color: ${weeklyPercent < 20 ? '#ef4444' : '#38bdf8'}">%${weeklyPercent} Kalan</span>
+              <div class="flex flex-col gap-1">
+                <div class="flex items-center justify-between text-[11px]">
+                  <span class="text-muted-foreground">Haftalık Limit</span>
+                  <span class="font-mono font-medium text-foreground">%${weeklyVal}</span>
                 </div>
-                <div class="progress-bar-bg">
-                  <div class="progress-bar-fill ${weeklyPercent < 30 ? 'warning' : ''}" style="width: ${weeklyPercent}%;"></div>
+                <div class="w-full bg-muted rounded-full h-1 overflow-hidden">
+                  <div class="h-1 rounded-full bg-primary" style="width: ${weeklyVal}%;"></div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- KART BUTONLARI -->
-          <div class="card-actions">
-            ${!acc.is_active ? `
-              <button class="btn btn-success" style="flex: 1;" onclick="setActiveAccount('${acc.id}')">
-                ✓ Bu Hesaba Geç
+          <!-- Alt Butonlar -->
+          <div class="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-border">
+            <span class="text-[10px] text-muted-foreground truncate" title="${fiveHourReset}">${fiveHourReset.length > 24 ? fiveHourReset.slice(0,24)+'...' : fiveHourReset}</span>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button onclick="refreshQuota('${acc.id}')" class="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Kotayı Yenile">
+                <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
               </button>
-            ` : `
-              <button class="btn" style="flex: 1; border-color: rgba(16, 185, 129, 0.4); color: #6ee7b7; cursor: default;">
-                🟢 Şu Anda Kullanılıyor
-              </button>
-            `}
-            <button class="btn" title="Kotayı Yenile" onclick="refreshQuota('${acc.id}')">🔄</button>
-            ${currentAccounts.length > 1 ? `
-              <button class="btn btn-danger" title="Hesabı Kaldır" onclick="deleteAccount('${acc.id}')">🗑️</button>
-            ` : ''}
+              ${currentAccounts.length > 1 ? `
+                <button onclick="deleteAccount('${acc.id}')" class="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" title="Hesabı Kaldır">
+                  <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                  </svg>
+                </button>
+              ` : ''}
+            </div>
           </div>
         `;
-        grid.appendChild(card);
+        container.appendChild(card);
       });
-
-      // YENİ HESAP EKLE KARTI
-      const addCard = document.createElement('div');
-      addCard.className = 'add-account-card';
-      addCard.onclick = openAddAccountModal;
-      addCard.innerHTML = `
-        <div class="add-icon">+</div>
-        <div style="font-weight: 700; font-size: 15px; margin-bottom: 6px;">Yeni Pro Hesap Ekle</div>
-        <div style="font-size: 12px; color: var(--text-muted); max-width: 240px;">
-          Elinizdeki diğer Pro Google hesaplarını tek tıkla ekleyip yönetin.
-        </div>
-      `;
-      grid.appendChild(addCard);
     }
 
     function setActiveAccount(id) {
@@ -1387,32 +982,114 @@
       });
     }
 
-    // MODAL
+    // 4. Modal Functions
     function openAddAccountModal() {
-      document.getElementById('addAccountModal').classList.add('open');
+      const m = document.getElementById('addAccountModal');
+      m.classList.remove('hidden');
+      m.classList.add('flex');
     }
 
     function closeAddAccountModal() {
-      document.getElementById('addAccountModal').classList.remove('open');
+      const m = document.getElementById('addAccountModal');
+      m.classList.add('hidden');
+      m.classList.remove('flex');
     }
 
     function importWindowsAccount() {
-      fetch('/api/accounts/import-windows', {
-        method: 'POST'
-      }).then(res => res.json()).then(data => {
-        if (data.status === 'ok') {
-          closeAddAccountModal();
-          alert(`✅ Hesap başarıyla içe aktarıldı: ${data.account.name} (${data.account.email})`);
-          loadAccounts();
+      fetch('/api/accounts/import-windows', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'ok') {
+            closeAddAccountModal();
+            alert(`✅ Yeni Google Pro Hesabı Eklendi:\n${data.account.name} (${data.account.email})`);
+            loadAccounts();
+          } else {
+            alert(`❌ Hata: ${data.error}`);
+          }
+        })
+        .catch(err => {
+          alert("Bağlantı hatası: " + err);
+        });
+    }
+
+    // 5. Override Settings
+    function applySettingsToUI() {
+      const chk = document.getElementById('chkOverride');
+      chk.checked = overrideSettings.override_enabled;
+
+      const pill = document.getElementById('overrideStatusPill');
+      const banner = document.getElementById('overrideBanner');
+      const bannerText = document.getElementById('overrideBannerText');
+      const metricBadge = document.getElementById('metricOverrideBadge');
+      const metricModel = document.getElementById('metricOverrideModel');
+      const metricEffort = document.getElementById('metricOverrideEffort');
+
+      metricModel.textContent = overrideSettings.target_model;
+      metricEffort.textContent = `Effort: ${overrideSettings.thinking_effort}`;
+
+      if (overrideSettings.override_enabled) {
+        pill.textContent = "OVERRIDE AKTİF";
+        pill.className = "text-[10px] font-mono px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-400 font-semibold";
+        metricBadge.textContent = "Zorunlu Override";
+        metricBadge.className = "inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400 border border-amber-500/20";
+        banner.className = "p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-xs flex items-start gap-2.5";
+        bannerText.innerHTML = `<strong class="text-amber-400">Override Aktif:</strong> Tüm OpenAI / DSH istekleri <strong>${overrideSettings.target_model}</strong> modeline ve <strong>${overrideSettings.thinking_effort}</strong> eforuna zorlanıyor.`;
+      } else {
+        pill.textContent = "ŞEFFAF MOD";
+        pill.className = "text-[10px] font-mono px-2 py-0.5 rounded border border-border text-muted-foreground";
+        metricBadge.textContent = "Şeffaf";
+        metricBadge.className = "inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground border border-border";
+        banner.className = "p-3 rounded-lg border border-border bg-background/50 text-xs flex items-start gap-2.5";
+        bannerText.innerHTML = `Şu an <strong>Şeffaf Mod</strong> devrede: İstemcinin ilettiği model ve efor parametreleri olduğu gibi korunur.`;
+      }
+
+      // Model Buttons State
+      document.querySelectorAll('#groupTargetModel .model-btn').forEach(btn => {
+        const m = btn.getAttribute('data-model');
+        if (m === overrideSettings.target_model) {
+          btn.className = "model-btn flex flex-col items-start p-2.5 rounded-lg border border-primary bg-primary/10 text-left transition-colors";
         } else {
-          alert(`❌ Hata: ${data.error}`);
+          btn.className = "model-btn flex flex-col items-start p-2.5 rounded-lg border border-border bg-background hover:bg-muted text-left transition-colors";
         }
-      }).catch(err => {
-        alert("Bağlantı hatası: " + err);
+      });
+
+      // Effort Buttons State
+      document.querySelectorAll('#groupThinkingEffort .effort-btn').forEach(btn => {
+        const e = btn.getAttribute('data-effort');
+        if (e === overrideSettings.thinking_effort) {
+          btn.className = "effort-btn py-1.5 px-2 rounded-md border border-primary bg-primary text-primary-foreground text-xs font-medium text-center transition-colors";
+        } else {
+          btn.className = "effort-btn py-1.5 px-2 rounded-md border border-border bg-background text-xs font-medium text-center hover:bg-muted transition-colors";
+        }
       });
     }
 
-    // CANLI İSTEK TABLOSU
+    function toggleOverrideSetting() {
+      overrideSettings.override_enabled = document.getElementById('chkOverride').checked;
+      saveOverrideSettings();
+    }
+
+    function setTargetModel(m) {
+      overrideSettings.target_model = m;
+      saveOverrideSettings();
+    }
+
+    function setThinkingEffort(e) {
+      overrideSettings.thinking_effort = e;
+      saveOverrideSettings();
+    }
+
+    function saveOverrideSettings() {
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(overrideSettings)
+      }).then(res => res.json()).then(data => {
+        applySettingsToUI();
+      });
+    }
+
+    // 6. Live Process Requests Table
     function renderRecentRequests(requests) {
       const tbody = document.getElementById('requestsTableBody');
       if (!requests || requests.length === 0) return;
@@ -1422,71 +1099,72 @@
 
     function prependLiveRequest(req) {
       const tbody = document.getElementById('requestsTableBody');
-      // Mevcut satır varsa güncelle
       const existing = document.getElementById('req-' + req.id);
       if (existing) {
         existing.innerHTML = createRequestRowHTML(req);
         return;
       }
-      // İlk satır "Henüz bir istek gelmedi" ise temizle
       if (tbody.children.length === 1 && tbody.children[0].innerText.includes('Henüz')) {
         tbody.innerHTML = '';
       }
       const tr = document.createElement('tr');
       tr.id = 'req-' + req.id;
+      tr.className = "hover:bg-muted/30 transition-colors";
       tr.innerHTML = createRequestRowHTML(req);
       tbody.insertBefore(tr, tbody.firstChild);
     }
 
     function createRequestRowHTML(req) {
       const cacheDisplay = req.cached_tokens > 0 
-        ? `<span class="cache-hit-pill">⚡ ${req.cached_tokens.toLocaleString()} HIT</span>`
-        : `<span style="color: var(--text-dim);">0</span>`;
+        ? `<span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-500/20 font-mono">⚡ ${req.cached_tokens.toLocaleString()} HIT</span>`
+        : `<span class="text-muted-foreground font-mono">0</span>`;
 
       const statusBadge = req.status === 'completed'
-        ? `<span style="color: #34d399; font-weight: 700;">✓ Tamamlandı</span>`
+        ? `<span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">200 OK</span>`
         : (req.status === 'running' 
-          ? `<span style="color: #38bdf8; font-weight: 700;">⏳ İşleniyor...</span>`
-          : `<span style="color: #ef4444; font-weight: 700;">❌ Hata</span>`);
+          ? `<span class="inline-flex items-center rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-400 animate-pulse">Stream</span>`
+          : `<span class="inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">Hata</span>`);
 
       return `
-        <td>
-          <span class="proc-tag">
-            <span>💻</span>
-            <span>${req.process_name}</span>
-            <span style="opacity: 0.6;">[PID: ${req.pid || '-'}]</span>
+        <td class="px-4 py-2.5">
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-muted border border-border font-mono text-[11px] text-foreground">
+            <svg class="size-3 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            <strong>${req.process_name || 'unknown'}</strong>
+            <span class="text-muted-foreground text-[10px]">[PID: ${req.pid || '-'}]</span>
           </span>
         </td>
-        <td style="color: var(--text-muted); font-family: var(--font-mono);">${req.timestamp}</td>
-        <td><span style="font-family: var(--font-mono); font-size: 11px; background: rgba(255,255,255,0.05); padding: 3px 7px; border-radius: 4px;">${req.protocol}</span></td>
-        <td style="color: var(--text-muted); font-family: var(--font-mono);">${req.requested_model}</td>
-        <td>
-          <strong style="font-family: var(--font-mono); color: var(--primary);">${req.applied_model}</strong>
-          ${req.is_overridden ? '<span class="override-pill">OVERRIDE</span>' : ''}
+        <td class="px-4 py-2.5 font-mono text-muted-foreground text-[11px]">${req.timestamp}</td>
+        <td class="px-4 py-2.5 font-mono text-muted-foreground text-[11px]">${req.protocol}</td>
+        <td class="px-4 py-2.5 font-mono text-muted-foreground text-[11px]">${req.requested_model}</td>
+        <td class="px-4 py-2.5 font-mono text-foreground font-medium text-[11px]">
+          ${req.applied_model}
+          ${req.is_overridden ? '<span class="ml-1 text-[9px] px-1 rounded bg-amber-500/20 text-amber-300 font-bold">OVR</span>' : ''}
         </td>
-        <td style="font-size: 12px; color: var(--text-muted);">${req.thinking_effort}</td>
-        <td style="font-family: var(--font-mono);">${req.duration_ms ? req.duration_ms + 'ms' : '-'}</td>
-        <td style="font-family: var(--font-mono); font-size: 12px;">
-          <span style="color: var(--text-muted);">${req.input_tokens || 0}</span> / 
-          <span style="color: var(--text-main);">${req.output_tokens || 0}</span> | 
+        <td class="px-4 py-2.5 font-mono text-muted-foreground text-[11px]">${req.thinking_effort}</td>
+        <td class="px-4 py-2.5 font-mono text-muted-foreground text-[11px]">${req.duration_ms ? req.duration_ms + 'ms' : '-'}</td>
+        <td class="px-4 py-2.5 text-[11px]">
+          <span class="text-muted-foreground font-mono">${req.input_tokens || 0}</span> / 
+          <span class="text-foreground font-mono font-medium">${req.output_tokens || 0}</span> | 
           ${cacheDisplay}
         </td>
-        <td>${statusBadge}</td>
+        <td class="px-4 py-2.5">${statusBadge}</td>
       `;
     }
 
-    function clearLiveRequests() {
+    function clearRequestsTable() {
       const tbody = document.getElementById('requestsTableBody');
       tbody.innerHTML = `
         <tr>
-          <td colspan="9" style="text-align: center; color: var(--text-dim); padding: 24px;">
+          <td colspan="9" class="px-4 py-8 text-center text-muted-foreground">
             İstek geçmişi temizlendi. Gateway dinlemede...
           </td>
         </tr>
       `;
     }
 
-    // PLAYGROUND FUNCTIONS
+    // 7. Test Playground Functions
     function toggleThoughtBox() {
       const body = document.getElementById('playThoughtBody');
       const arrow = document.getElementById('thoughtToggleArrow');
@@ -1512,10 +1190,10 @@
       const thoughtContainer = document.getElementById('playThoughtContainer');
       const thoughtBody = document.getElementById('playThoughtBody');
 
-      btnSend.style.display = 'none';
-      btnStop.style.display = 'inline-flex';
-      respView.innerHTML = '<span style="color: var(--text-muted);">Model yanıtı hazırlanıyor...</span>';
-      thoughtContainer.classList.remove('visible');
+      btnSend.classList.add('hidden');
+      btnStop.classList.remove('hidden');
+      respView.innerHTML = '<span class="text-muted-foreground text-xs font-mono">Gateway üzerinden yanıt bekleniyor...</span>';
+      thoughtContainer.classList.add('hidden');
       thoughtBody.textContent = '';
 
       playAbortController = new AbortController();
@@ -1565,27 +1243,24 @@
               if (dataStr === '[DONE]') continue;
               try {
                 const parsed = JSON.parse(dataStr);
-                // Chat Completions
                 if (parsed.choices && parsed.choices[0]) {
                   const delta = parsed.choices[0].delta || {};
                   if (delta.reasoning_content) {
                     fullThought += delta.reasoning_content;
                     thoughtBody.textContent = fullThought;
-                    thoughtContainer.classList.add('visible');
+                    thoughtContainer.classList.remove('hidden');
                   }
                   if (delta.content) {
                     fullText += delta.content;
                     respView.innerHTML = marked.parse(fullText);
                   }
                 }
-                // Usage
                 if (parsed.usage) {
                   document.getElementById('mPrompt').textContent = parsed.usage.prompt_tokens || 0;
                   document.getElementById('mOutput').textContent = parsed.usage.completion_tokens || 0;
                   const cached = (parsed.usage.prompt_tokens_details && parsed.usage.prompt_tokens_details.cached_tokens) || 0;
                   document.getElementById('mCache').textContent = cached > 0 ? `${cached.toLocaleString()} ⚡ HIT!` : '0';
                 }
-                // Responses API events
                 if (parsed.delta) {
                   fullText += parsed.delta;
                   respView.innerHTML = marked.parse(fullText);
@@ -1597,11 +1272,11 @@
         }
       } catch (err) {
         if (err.name !== 'AbortError') {
-          respView.innerHTML = `<span style="color: #ef4444;">Hata: ${err.message}</span>`;
+          respView.innerHTML = `<span class="text-destructive text-xs">Hata: ${err.message}</span>`;
         }
       } finally {
-        btnSend.style.display = 'inline-flex';
-        btnStop.style.display = 'none';
+        btnSend.classList.remove('hidden');
+        btnStop.classList.add('hidden');
       }
     }
 
@@ -1611,17 +1286,17 @@
       }
     }
 
-    // Cache test butonu
+    // 25k Cache Test Yükleyici
     document.getElementById('btnLoadCacheTest').addEventListener('click', () => {
       document.getElementById('playModel').value = 'gemini-3.8-flash-high';
       const repeatBlock = "Enterprise cloud distributed architecture with consensus raft cluster, zero-trust network mTLS, distributed transaction saga pattern. ";
       const big25k = "### KURUMSAL BULUT MİMARİSİ VE GÜVENLİK STANDARTLARI ŞARTNAMESİ ###\n\n" + repeatBlock.repeat(1100);
       document.getElementById('playSystemPrompt').value = big25k;
-      document.getElementById('playUserPrompt').value = "What is this text about in 3 words?";
+      document.getElementById('playUserPrompt').value = "Bu şartname metnini 3 kelimede özetle.";
       alert("✅ 25.000 Token'lık Cache Test Verisi Yüklendi!\n\n1. Gönder'e basın -> Cache: 0.\n2. Ardından soru metnini değiştirip tekrar Gönder'e basın -> 20.450 token ⚡ HIT göreceksiniz!");
     });
 
-    // BAŞLATMA
+    // 8. Bootstrap
     window.addEventListener('DOMContentLoaded', () => {
       connectWebSocket();
       loadAccounts();
