@@ -263,6 +263,31 @@ func handleRequestsAPI(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func handleProcessInspectAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	pidStr := r.URL.Query().Get("pid")
+	if pidStr == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "pid parametresi gerekli"})
+		return
+	}
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil || pid <= 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "geçersiz pid"})
+		return
+	}
+
+	report, err := InspectPIDNetwork(pid)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(report)
+}
+
 func handleResponses(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -643,6 +668,9 @@ func main() {
 
 	// Canlı İstek Geçmişi
 	mux.HandleFunc("/api/requests", handleRequestsAPI)
+
+	// Süreç ve Ağ Port İnceleme API
+	mux.HandleFunc("/api/process/inspect", handleProcessInspectAPI)
 
 	handler := corsMiddleware(mux)
 

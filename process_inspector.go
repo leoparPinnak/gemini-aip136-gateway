@@ -180,3 +180,118 @@ func (pi *ProcessInspector) ResolveClientProcess(remoteAddr string) (int, string
 
 	return 0, "İstemci Uygulama (Port: " + portStr + ")"
 }
+
+// ----------------------------------------------------------------------
+// SÜREÇ AĞ VE PORT DETAY İNCELEYİCİSİ (INSPECTOR PROFILE)
+// ----------------------------------------------------------------------
+
+type ProcessSocketConnection struct {
+	Protocol      string `json:"protocol"`
+	LocalAddress  string `json:"local_address"`
+	RemoteAddress string `json:"remote_address"`
+	State         string `json:"state"`
+	IsServerPort  bool   `json:"is_server_port"`
+}
+
+type ProcessInspectReport struct {
+	PID           int                       `json:"pid"`
+	ProcessName   string                    `json:"process_name"`
+	Executable    string                    `json:"executable,omitempty"`
+	HasServerPort bool                      `json:"has_server_port"`
+	ServerPorts   []string                  `json:"server_ports"`
+	Connections   []ProcessSocketConnection `json:"connections"`
+	TotalSockets  int                       `json:"total_sockets"`
+}
+
+// InspectPIDNetwork belirli bir PID'nin dinlediği sunucu portlarını ve konuştuğu tüm uçları döner.
+func InspectPIDNetwork(pid int) (*ProcessInspectReport, error) {
+	report := &ProcessInspectReport{
+		PID:         pid,
+		ServerPorts: make([]string, 0),
+		Connections: make([]ProcessSocketConnection, 0),
+	}
+
+	// 1. Süreç Adını ve Yolunu Çözümle
+	if GlobalProcessInspector != nil {
+		GlobalProcessInspector.mu.RLock()
+		report.ProcessName = GlobalProcessInspector.pidToName[pid]
+		GlobalProcessInspector.mu.RUnlock()
+	}
+	if report.ProcessName == "" {
+		cmdTask := exec.Command("tasklist", "/FI", "PID eq "+strconv.Itoa(pid), "/FO", "CSV", "/NH")
+		if taskOut, err := cmdTask.Output(); err == nil {
+			parts := strings.Split(string(taskOut), "\",\"")
+			if len(parts) >= 2 {
+				report.ProcessName = strings.Trim(parts[0], "\"\r\n ")
+			}
+		}
+	}
+	if report.ProcessName == "" {
+		report.ProcessName = "Program (PID: " + strconv.Itoa(pid) + ")"
+	}
+
+	// 2. TCP Soketleri (Sunucu Portları & Dış Sunucu Bağlantıları)
+	cmdTCP := exec.Command("netstat", "-ano", "-p", "tcp")
+	if outTCP, err := cmdTCP.Output(); err == nil {
+		scanner := bufio.NewScanner(bytes.NewReader(outTCP))
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if !strings.HasPrefix(line, "TCP") {
+				continue
+			}
+			fields := strings.Fields(line)
+			if len(fields) >= 5 {
+				linePID, err := strconv.Atoi(fields[len(fields)-1])
+				if err == nil && linePID == pid {
+					localAddr := fields[1]
+					remoteAddr := fields[2]
+					state := fields[3]
+					isServer := (state == "LISTENING")
+
+					if isServer {
+						report.ServerPorts = append(report.ServerPorts, localAddr)
+					}
+
+					report.Connections = append(report.Connections, ProcessSocketConnection{
+						Protocol:      "TCP",
+						LocalAddress:  localAddr,
+						RemoteAddress: remoteAddr,
+						State:         state,
+						IsServerPort:  isServer,
+					})
+				}
+			}
+		}
+	}
+
+	// 3. UDP Soketleri (Varsa dinleme uçları)
+	cmdUDP := exec.Command("netstat", "-ano", "-p", "udp")
+	if outUDP, err := cmdUDP.Output(); err == nil {
+		scanner := bufio.NewScanner(bytes.NewReader(outUDP))
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if !strings.HasPrefix(line, "UDP") {
+				continue
+			}
+			fields := strings.Fields(line)
+			if len(fields) >= 4 {
+				linePID, err := strconv.Atoi(fields[len(fields)-1])
+				if err == nil && linePID == pid {
+					localAddr := fields[1]
+					report.ServerPorts = append(report.ServerPorts, localAddr)
+					report.Connections = append(report.Connections, ProcessSocketConnection{
+						Protocol:      "UDP",
+						LocalAddress:  localAddr,
+						RemoteAddress: "*:*",
+						State:         "LISTENING",
+						IsServerPort:  true,
+					})
+				}
+			}
+		}
+	}
+
+	report.HasServerPort = len(report.ServerPorts) > 0
+	report.TotalSockets = len(report.Connections)
+	return report, nil
+}
