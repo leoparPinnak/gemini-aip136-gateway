@@ -1140,6 +1140,19 @@
       const m = document.getElementById('addAccountModal');
       m.classList.remove('hidden');
       m.classList.add('flex');
+      fetchFreshAuthURL();
+    }
+
+    async function fetchFreshAuthURL() {
+      try {
+        const res = await fetch('/api/accounts/auth-url');
+        const data = await res.json();
+        if (data.auth_url) {
+          currentOAuthState = data.state || "";
+          document.getElementById('inpAuthURL').value = data.auth_url;
+          document.getElementById('oauthLinkDisplay').classList.remove('hidden');
+        }
+      } catch (e) {}
     }
 
     function closeAddAccountModal() {

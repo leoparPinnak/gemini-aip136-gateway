@@ -506,15 +506,40 @@ func getOAuthCredentials() (string, string) {
 }
 
 type OAuthSession struct {
-	Verifier  string
-	State     string
-	CreatedAt time.Time
+	Verifier  string    `json:"verifier"`
+	State     string    `json:"state"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 var (
 	oauthSessionsMu sync.Mutex
 	oauthSessions   = make(map[string]*OAuthSession)
 )
+
+func saveOAuthSessionsLocked() {
+	if b, err := json.Marshal(oauthSessions); err == nil {
+		_ = os.WriteFile("oauth_sessions.json", b, 0600)
+	}
+}
+
+func loadOAuthSessions() {
+	oauthSessionsMu.Lock()
+	defer oauthSessionsMu.Unlock()
+	if b, err := os.ReadFile("oauth_sessions.json"); err == nil {
+		var saved map[string]*OAuthSession
+		if err := json.Unmarshal(b, &saved); err == nil {
+			for k, v := range saved {
+				if time.Since(v.CreatedAt) < 60*time.Minute {
+					oauthSessions[k] = v
+				}
+			}
+		}
+	}
+}
+
+func init() {
+	loadOAuthSessions()
+}
 
 // GenerateAuthURL PKCE code_verifier ve challenge üreterek tarayıcıda açılacak yetkilendirme linkini döner.
 func GenerateAuthURL() (string, string, error) {
@@ -542,12 +567,13 @@ func GenerateAuthURL() (string, string, error) {
 		State:     state,
 		CreatedAt: time.Now(),
 	}
-	// 30 dakikadan eski oturumları temizle
+	// 60 dakikadan eski oturumları temizle
 	for s, sess := range oauthSessions {
-		if time.Since(sess.CreatedAt) > 30*time.Minute {
+		if time.Since(sess.CreatedAt) > 60*time.Minute {
 			delete(oauthSessions, s)
 		}
 	}
+	saveOAuthSessionsLocked()
 	oauthSessionsMu.Unlock()
 
 	cid, _ := getOAuthCredentials()
@@ -581,7 +607,7 @@ func (s *AccountStore) ExchangeOAuthCode(codeOrURL, state string) (*Account, err
 			if c := u.Query().Get("code"); c != "" {
 				code = c
 			}
-			if st := u.Query().Get("state"); st != "" && state == "" {
+			if st := u.Query().Get("state"); st != "" {
 				state = st
 			}
 		} else {
@@ -594,6 +620,12 @@ func (s *AccountStore) ExchangeOAuthCode(codeOrURL, state string) (*Account, err
 					code = sub
 				}
 			}
+			if strings.Contains(codeOrURL, "state=") {
+				stParts := strings.Split(codeOrURL, "state=")
+				if len(stParts) > 1 {
+					state = strings.Split(stParts[1], "&")[0]
+				}
+			}
 		}
 	}
 
@@ -601,11 +633,14 @@ func (s *AccountStore) ExchangeOAuthCode(codeOrURL, state string) (*Account, err
 	var verifier string
 	var matchedState string
 	oauthSessionsMu.Lock()
-	if sess, ok := oauthSessions[state]; ok {
-		verifier = sess.Verifier
-		matchedState = state
-	} else {
-		// State eşleşmediyse en son oturumu al
+	if state != "" {
+		if sess, ok := oauthSessions[state]; ok {
+			verifier = sess.Verifier
+			matchedState = state
+		}
+	}
+	if verifier == "" {
+		// State eşleşmediyse veya boşsa en son oturumu al
 		var latest *OAuthSession
 		var latestKey string
 		for sKey, sess := range oauthSessions {
@@ -658,6 +693,7 @@ func (s *AccountStore) ExchangeOAuthCode(codeOrURL, state string) (*Account, err
 	if matchedState != "" {
 		oauthSessionsMu.Lock()
 		delete(oauthSessions, matchedState)
+		saveOAuthSessionsLocked()
 		oauthSessionsMu.Unlock()
 	}
 

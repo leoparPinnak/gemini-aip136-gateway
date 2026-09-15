@@ -8,6 +8,7 @@ go_gateway.exe
 
 # Local Personal Credentials & Storage (NEVER COMMIT)
 accounts.json
+oauth_sessions.json
 override_settings.json
 
 # OS generated files
