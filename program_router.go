@@ -12,8 +12,10 @@ import (
 
 type ProgramRule struct {
 	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Pattern      string `json:"pattern"`
+	PID          int    `json:"pid"`                    // Hedef PID (Örn: 90912). 0 ise desen bazlı genel kural.
+	ProcessName  string `json:"process_name,omitempty"` // Süreç adı (Örn: node.exe (single_catalog_server.js))
+	Name         string `json:"name"`                   // Açıklama / Kural Adı
+	Pattern      string `json:"pattern,omitempty"`      // Fallback desen
 	AccountID    string `json:"account_id"`
 	AccountEmail string `json:"account_email"`
 	AccountName  string `json:"account_name"`
@@ -81,6 +83,9 @@ func (r *ProgramRouter) GetRules() []ProgramRule {
 	return result
 }
 
+// AddOrUpdateRule kural ekler veya günceller.
+// KURAL: Bir PID'ye yalnızca TEK bir kural atanabilir!
+// Eğer aynı PID için zaten bir kural varsa, o kural güncellenir.
 func (r *ProgramRouter) AddOrUpdateRule(rule ProgramRule) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -94,7 +99,9 @@ func (r *ProgramRouter) AddOrUpdateRule(rule ProgramRule) error {
 
 	found := false
 	for i, existing := range r.rules {
-		if existing.ID == rule.ID {
+		// Eğer rule.PID belirtilmişse ve bu PID zaten listede varsa -> güncelle (1 PID = 1 Kural)
+		if (rule.PID > 0 && existing.PID == rule.PID) || (rule.ID != "" && existing.ID == rule.ID) {
+			rule.ID = existing.ID // Var olan kural ID'sini koru
 			r.rules[i] = rule
 			found = true
 			break
@@ -134,26 +141,47 @@ func (r *ProgramRouter) ToggleRule(id string, enabled bool) error {
 	return fmt.Errorf("kural bulunamadı: %s", id)
 }
 
-// RouteAccount gelen istemci süreç bilgilerine (exeName ve displayName) göre atanmış hesabı tespit eder.
-func (r *ProgramRouter) RouteAccount(exeName, displayName string) (*Account, string) {
+// RouteAccount gelen istemcinin PID, exeName ve displayName bilgilerine göre atanmış hesabı tespit eder.
+func (r *ProgramRouter) RouteAccount(pid int, exeName, displayName string) (*Account, string) {
 	r.mu.RLock()
 	rulesCopy := make([]ProgramRule, len(r.rules))
 	copy(rulesCopy, r.rules)
 	r.mu.RUnlock()
 
+	// 1. ÖNCELİK: Birebir PID Eşleşmesi (En yüksek öncelik)
+	if pid > 0 {
+		for _, rule := range rulesCopy {
+			if rule.Enabled && rule.PID == pid {
+				if GlobalAccountStore != nil {
+					acc := GlobalAccountStore.GetAccountByID(rule.AccountID)
+					if acc == nil && rule.AccountEmail != "" {
+						acc = GlobalAccountStore.GetAccountByID(rule.AccountEmail)
+					}
+					if acc != nil {
+						ruleLabel := rule.Name
+						if ruleLabel == "" {
+							ruleLabel = fmt.Sprintf("PID %d Özel Kuralı", pid)
+						}
+						return acc, ruleLabel
+					}
+				}
+			}
+		}
+	}
+
+	// 2. ÖNCELİK: İsim / Desen Eşleşmesi (PID tanımlı olmayan genel kurallar)
 	lowerExe := strings.ToLower(exeName)
 	lowerDisplay := strings.ToLower(displayName)
 
 	for _, rule := range rulesCopy {
-		if !rule.Enabled {
-			continue
+		if !rule.Enabled || rule.PID > 0 {
+			continue // PID bazlı kurallar yukarıda kontrol edildi
 		}
 		pattern := strings.ToLower(strings.TrimSpace(rule.Pattern))
 		if pattern == "" {
 			continue
 		}
 
-		// Pattern eşleşmesi (exe adında veya görünen ad/script adında)
 		if strings.Contains(lowerDisplay, pattern) || strings.Contains(lowerExe, pattern) {
 			if GlobalAccountStore != nil {
 				acc := GlobalAccountStore.GetAccountByID(rule.AccountID)
@@ -167,7 +195,7 @@ func (r *ProgramRouter) RouteAccount(exeName, displayName string) (*Account, str
 		}
 	}
 
-	// Varsayılan aktif hesap
+	// 3. ÖNCELİK: Varsayılan aktif hesap
 	if GlobalAccountStore != nil {
 		active := GlobalAccountStore.GetActiveAccount()
 		if active != nil {

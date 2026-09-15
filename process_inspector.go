@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,7 +47,7 @@ type ProcessDetail struct {
 type ProcessInspector struct {
 	portToPID  map[int]int
 	pidToInfo  map[int]*ProcessDetail
-	detected   map[string]*ProcessDetail
+	detected   map[int]*ProcessDetail
 	mu         sync.RWMutex
 	lastUpdate time.Time
 }
@@ -57,7 +58,7 @@ func InitProcessInspector() {
 	inspector := &ProcessInspector{
 		portToPID: make(map[int]int),
 		pidToInfo: make(map[int]*ProcessDetail),
-		detected:  make(map[string]*ProcessDetail),
+		detected:  make(map[int]*ProcessDetail),
 	}
 	GlobalProcessInspector = inspector
 
@@ -299,15 +300,15 @@ func (pi *ProcessInspector) ResolveClientProcess(remoteAddr string) (int, string
 		pi.mu.Lock()
 		detail.LastSeen = time.Now()
 		detail.RequestCount++
-		// Detected listesini güncelle
-		key := detail.DisplayName
-		if existing, has := pi.detected[key]; has {
+		// Detected listesini PID bazında güncelle (her PID tek bir kayıt)
+		if existing, has := pi.detected[pid]; has {
 			existing.LastSeen = time.Now()
 			existing.RequestCount++
-			existing.PID = pid
+			existing.DisplayName = detail.DisplayName
+			existing.CommandLine = detail.CommandLine
 		} else {
 			copyDet := *detail
-			pi.detected[key] = &copyDet
+			pi.detected[pid] = &copyDet
 		}
 		pi.mu.Unlock()
 
@@ -318,7 +319,7 @@ func (pi *ProcessInspector) ResolveClientProcess(remoteAddr string) (int, string
 	return 0, "İstemci", fallbackName
 }
 
-// GetDetectedPrograms şimdiye kadar Gateway'e istek atmış tüm programların listesini döner.
+// GetDetectedPrograms şimdiye kadar Gateway'e istek atmış tüm programların listesini İLK GİREN EN BAŞTA olacak şekilde döner.
 func (pi *ProcessInspector) GetDetectedPrograms() []ProcessDetail {
 	pi.mu.RLock()
 	defer pi.mu.RUnlock()
@@ -327,6 +328,15 @@ func (pi *ProcessInspector) GetDetectedPrograms() []ProcessDetail {
 	for _, d := range pi.detected {
 		list = append(list, *d)
 	}
+
+	// İLK GİREN EN BAŞTA DURSUN (FirstSeen ascending: eski olan en başta kalır, yer değiştirmez)
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].FirstSeen.Equal(list[j].FirstSeen) {
+			return list[i].PID < list[j].PID
+		}
+		return list[i].FirstSeen.Before(list[j].FirstSeen)
+	})
+
 	return list
 }
 

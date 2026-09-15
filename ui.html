@@ -554,8 +554,8 @@
                   <table class="w-full text-left text-xs">
                     <thead class="bg-muted/50 border-b border-border text-muted-foreground font-medium uppercase tracking-wider text-[11px]">
                       <tr>
-                        <th class="px-3 py-2">Kural Adı</th>
-                        <th class="px-3 py-2">Program Kalıbı</th>
+                        <th class="px-3 py-2">Hedef PID</th>
+                        <th class="px-3 py-2">Program / Süreç</th>
                         <th class="px-3 py-2">Atanan Pro Hesap</th>
                         <th class="px-3 py-2 text-center">Durum</th>
                         <th class="px-3 py-2 text-right">İşlem</th>
@@ -943,7 +943,7 @@
           <div class="size-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
             🎯
           </div>
-          <h3 class="text-base font-semibold text-foreground">Yeni Program Kuralı Ekle</h3>
+          <h3 class="text-base font-semibold text-foreground">PID / Program Kuralı Tanımla</h3>
         </div>
         <button onclick="closeNewRuleModal()" class="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer">
           <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -951,15 +951,32 @@
       </div>
 
       <div class="flex flex-col gap-3 text-xs">
-        <div class="flex flex-col gap-1.5">
-          <label class="font-medium text-foreground">Kural Başlığı:</label>
-          <input id="ruleInputName" type="text" placeholder="Örn: Jackett Stream Player" class="w-full px-3 py-2 rounded-md border border-input bg-background text-foreground text-xs focus:outline-hidden focus:ring-1 focus:ring-ring">
+        <div class="p-2.5 rounded-md bg-primary/10 border border-primary/20 text-[11px] text-foreground flex items-start gap-2">
+          <span class="text-primary font-bold shrink-0">ℹ️</span>
+          <span><strong>1 PID = 1 Kural Prensibi:</strong> Bir PID numarasına yalnızca tek bir kural atanabilir. Aynı PID için kural kaydedildiğinde önceki kural otomatik olarak bu hesapla güncellenir.</span>
         </div>
 
         <div class="flex flex-col gap-1.5">
-          <label class="font-medium text-foreground">Program / Script Kalıbı:</label>
-          <input id="ruleInputPattern" type="text" placeholder="Örn: exact_matcher_server.js veya agy.exe" class="w-full px-3 py-2 rounded-md border border-input bg-background text-foreground font-mono text-xs focus:outline-hidden focus:ring-1 focus:ring-ring">
-          <p class="text-[11px] text-muted-foreground">Büyük/küçük harf duyarsızdır. Dosya adı veya script adında geçen herhangi bir kelimeyi yazabilirsiniz.</p>
+          <label class="font-medium text-foreground">Hedef Programı Seçin:</label>
+          <select id="ruleSelectTarget" onchange="onRuleTargetChange()" class="w-full px-3 py-2 rounded-md border border-input bg-background text-foreground text-xs focus:outline-hidden focus:ring-1 focus:ring-ring">
+            <option value="custom">✏️ Manuel PID / Kalıp Gir</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div class="flex flex-col gap-1.5">
+            <label class="font-medium text-foreground">Hedef PID:</label>
+            <input id="ruleInputPID" type="number" placeholder="Örn: 90912" class="w-full px-3 py-2 rounded-md border border-input bg-background text-foreground font-mono text-xs focus:outline-hidden focus:ring-1 focus:ring-ring">
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="font-medium text-foreground">Kural Başlığı:</label>
+            <input id="ruleInputName" type="text" placeholder="Örn: Katalog Servisi" class="w-full px-3 py-2 rounded-md border border-input bg-background text-foreground text-xs focus:outline-hidden focus:ring-1 focus:ring-ring">
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="font-medium text-foreground">Program / Script Adı (Opsiyonel Kalıp):</label>
+          <input id="ruleInputPattern" type="text" placeholder="Örn: node.exe (single_catalog_server.js)" class="w-full px-3 py-2 rounded-md border border-input bg-background text-foreground font-mono text-xs focus:outline-hidden focus:ring-1 focus:ring-ring">
         </div>
 
         <div class="flex flex-col gap-1.5">
@@ -975,7 +992,7 @@
           İptal
         </button>
         <button onclick="submitNewProgramRule()" class="py-1.5 px-4 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity shadow-xs cursor-pointer">
-          Kuralı Kaydet
+          Kuralı Kaydet (1:1)
         </button>
       </div>
     </div>
@@ -1729,6 +1746,7 @@
         const data = await res.json();
         currentAppRules = data.rules || [];
         renderAppRulesTable();
+        renderDetectedAppsList();
       } catch (e) {
         console.error("Program kuralları yüklenemedi:", e);
       }
@@ -1761,37 +1779,99 @@
         return;
       }
 
-      container.innerHTML = '';
+      // Boş durum mesajı varsa temizle
+      const emptyPlaceholder = container.querySelector('.text-center');
+      if (emptyPlaceholder) {
+        container.innerHTML = '';
+      }
+
+      const activePids = new Set(currentDetectedApps.map(a => a.pid));
+
+      // Mevcut olmayan eski kartları temizle
+      Array.from(container.children).forEach(child => {
+        if (child.id && child.id.startsWith('app-card-')) {
+          const pid = parseInt(child.id.replace('app-card-', ''));
+          if (!activePids.has(pid)) {
+            container.removeChild(child);
+          }
+        }
+      });
+
+      // İLK GİREN EN BAŞTA SABİT: Sıralamayı bozmadan in-place güncelle veya kart oluştur
       currentDetectedApps.forEach(app => {
-        const div = document.createElement('div');
-        div.className = "p-2.5 rounded-lg border border-border bg-card flex flex-col gap-2 hover:border-muted-foreground/40 transition-colors";
+        let card = document.getElementById(`app-card-${app.pid}`);
+        const assignedRule = currentAppRules.find(r => r.pid === app.pid && r.enabled);
 
-        let accOptions = currentAccounts.map(a => `
-          <option value="${a.id}">${a.name} (${a.email})</option>
-        `).join('');
+        if (!card) {
+          card = document.createElement('div');
+          card.id = `app-card-${app.pid}`;
+          card.className = "p-3 rounded-lg border border-border bg-card flex flex-col gap-2.5 hover:border-muted-foreground/40 transition-colors shadow-2xs";
 
-        div.innerHTML = `
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="size-2 rounded-full bg-emerald-400 shrink-0"></span>
-              <span class="font-mono font-semibold text-xs text-foreground truncate" title="${app.display_name}">${app.display_name}</span>
+          let accOptions = currentAccounts.map(a => {
+            const isSel = assignedRule && (assignedRule.account_id === a.id || assignedRule.account_email === a.email);
+            return `<option value="${a.id}" ${isSel ? 'selected' : ''}>${a.name} (${a.email})</option>`;
+          }).join('');
+
+          card.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="size-2 rounded-full bg-emerald-400 shrink-0"></span>
+                <span id="app-name-${app.pid}" class="font-mono font-semibold text-xs text-foreground truncate" title="${app.display_name}">${app.display_name}</span>
+              </div>
+              <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 shrink-0">PID: ${app.pid}</span>
             </div>
-            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">[PID: ${app.pid}]</span>
-          </div>
-          <div class="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
-            <span>İstek: <strong class="text-foreground font-semibold">${app.request_count}</strong></span>
-            <span>Son: ${app.last_seen ? new Date(app.last_seen).toLocaleTimeString() : '-'}</span>
-          </div>
-          <div class="flex items-center gap-2 pt-1 border-t border-border/50">
-            <select id="sel-app-${app.pid}" class="flex-1 px-2 py-1 rounded bg-background border border-input text-[11px] text-foreground focus:outline-hidden">
-              ${accOptions}
-            </select>
-            <button onclick="quickAssignAccountFromCard(${app.pid})" class="px-2.5 py-1 rounded bg-primary text-primary-foreground text-[11px] font-medium hover:opacity-90 shrink-0 transition-opacity shadow-xs cursor-pointer" title="Bu programı seçilen hesaba ata">
-              Ata ➔
-            </button>
-          </div>
-        `;
-        container.appendChild(div);
+            <div class="flex items-center justify-between text-[10px] text-muted-foreground font-mono bg-muted/30 px-2 py-1 rounded">
+              <span>İstek: <strong id="app-reqcount-${app.pid}" class="text-foreground font-semibold">${app.request_count}</strong></span>
+              <span>Son: <strong id="app-lastseen-${app.pid}" class="text-foreground">${app.last_seen ? new Date(app.last_seen).toLocaleTimeString() : '-'}</strong></span>
+            </div>
+            <div id="app-assigned-badge-${app.pid}" class="text-[11px]"></div>
+            <div class="flex items-center gap-2 pt-1 border-t border-border/50">
+              <select id="sel-app-${app.pid}" class="flex-1 px-2 py-1 rounded bg-background border border-input text-[11px] text-foreground focus:outline-hidden">
+                ${accOptions}
+              </select>
+              <button onclick="quickAssignAccountFromCard(${app.pid})" class="px-2.5 py-1 rounded bg-primary text-primary-foreground text-[11px] font-medium hover:opacity-90 shrink-0 transition-opacity shadow-xs cursor-pointer" title="Bu PID'ye seçilen hesabı bağla (1 PID = 1 Kural)">
+                Ata ➔
+              </button>
+              <button onclick="inspectProcessNetwork(${app.pid}, '${app.display_name.replace(/'/g, "\\'")}')" class="p-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border shrink-0 text-[11px]" title="Ağ ve Portları İncele">
+                🔍
+              </button>
+            </div>
+          `;
+          container.appendChild(card);
+        } else {
+          // Kart zaten var: Mevcut seçimi veya DOM durumunu yok etmeden YERİNDE güncelle
+          const nameEl = document.getElementById(`app-name-${app.pid}`);
+          if (nameEl && nameEl.textContent !== app.display_name) {
+            nameEl.textContent = app.display_name;
+            nameEl.title = app.display_name;
+          }
+          const reqEl = document.getElementById(`app-reqcount-${app.pid}`);
+          if (reqEl) reqEl.textContent = app.request_count;
+          const lastEl = document.getElementById(`app-lastseen-${app.pid}`);
+          if (lastEl) lastEl.textContent = app.last_seen ? new Date(app.last_seen).toLocaleTimeString() : '-';
+
+          // appendChild var olan elemanı sıranın sonuna ekler; loop sırayla çalıştığından FirstSeen sıralaması garanti edilir
+          container.appendChild(card);
+        }
+
+        // Atanmış hesap rozetini güncelle
+        const badgeEl = document.getElementById(`app-assigned-badge-${app.pid}`);
+        if (badgeEl) {
+          if (assignedRule) {
+            badgeEl.innerHTML = `
+              <div class="flex items-center justify-between gap-1 text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <span class="truncate">🎯 Atanan: <strong>${assignedRule.account_name || assignedRule.account_email}</strong></span>
+                <span class="font-mono text-[9px] shrink-0 text-muted-foreground">[1 PID = 1 Kural]</span>
+              </div>
+            `;
+          } else {
+            badgeEl.innerHTML = `
+              <div class="flex items-center justify-between gap-1 text-[10px] px-2 py-0.5 rounded bg-muted/40 text-muted-foreground">
+                <span>Varsayılan Aktif Pro Hesaba Yönlendiriliyor</span>
+              </div>
+            `;
+          }
+        }
       });
     }
 
@@ -1801,20 +1881,20 @@
       const select = document.getElementById(`sel-app-${pid}`);
       if (!select) return;
       const accountId = select.value;
-
-      let pattern = app.display_name;
-      if (pattern.includes('(') && pattern.includes(')')) {
-        const match = pattern.match(/\((.*?)\)/);
-        if (match && match[1]) pattern = match[1];
-      }
+      const account = currentAccounts.find(a => a.id === accountId);
 
       await saveAppRule({
-        name: `${app.display_name} Yönlendirmesi`,
-        pattern: pattern,
+        pid: pid,
+        process_name: app.display_name,
+        name: `PID ${pid} (${app.display_name})`,
+        pattern: app.display_name,
         account_id: accountId,
+        account_name: account ? account.name : '',
+        account_email: account ? account.email : '',
         enabled: true
       });
-      alert(`🎯 "${pattern}" kalıbı seçilen hesaba başarıyla bağlandı!`);
+
+      renderDetectedAppsList();
     }
 
     function renderAppRulesTable() {
@@ -1825,7 +1905,7 @@
         tbody.innerHTML = `
           <tr>
             <td colspan="5" class="py-6 text-center text-muted-foreground text-xs font-mono">
-              Henüz bir yönlendirme kuralı eklenmedi. Tüm istekler varsayılan aktif hesaba yönlendiriliyor.
+              Henüz bir PID yönlendirme kuralı eklenmedi. Tüm istekler varsayılan aktif hesaba yönlendiriliyor.
             </td>
           </tr>
         `;
@@ -1837,14 +1917,23 @@
         const tr = document.createElement('tr');
         tr.className = "hover:bg-muted/30 transition-colors";
 
+        const pidBadge = rule.pid > 0
+          ? `<span class="inline-flex items-center px-2 py-0.5 rounded font-mono font-bold text-xs bg-primary/10 text-primary border border-primary/20">PID: ${rule.pid}</span>`
+          : `<span class="inline-flex items-center px-2 py-0.5 rounded font-mono text-[10px] bg-muted text-muted-foreground border border-border">Genel Kalıp</span>`;
+
+        const procDisplay = rule.process_name || rule.pattern || rule.name || '-';
+
         const statusBadge = rule.enabled
           ? `<button onclick="toggleProgramRule('${rule.id}', false)" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-pointer hover:opacity-80">● Aktif</button>`
           : `<button onclick="toggleProgramRule('${rule.id}', true)" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-muted text-muted-foreground border border-border cursor-pointer hover:opacity-80">○ Pasif</button>`;
 
         tr.innerHTML = `
-          <td class="px-3 py-2.5 font-medium text-foreground text-xs">${rule.name || 'İsimsiz Kural'}</td>
-          <td class="px-3 py-2.5 font-mono text-[11px] text-primary">
-            <span class="px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20">${rule.pattern}</span>
+          <td class="px-3 py-2.5">${pidBadge}</td>
+          <td class="px-3 py-2.5 font-mono text-xs text-foreground">
+            <div class="flex flex-col">
+              <span class="font-semibold text-foreground truncate max-w-[220px]" title="${procDisplay}">${procDisplay}</span>
+              ${rule.name && rule.name !== procDisplay ? `<span class="text-[10px] text-muted-foreground">${rule.name}</span>` : ''}
+            </div>
           </td>
           <td class="px-3 py-2.5 text-xs">
             <div class="flex flex-col">
@@ -1865,15 +1954,47 @@
 
     function openNewRuleModal() {
       const modal = document.getElementById('newAppRuleModal');
-      const select = document.getElementById('ruleSelectAccount');
-      select.innerHTML = currentAccounts.map(a => `
+      const selectAcc = document.getElementById('ruleSelectAccount');
+      selectAcc.innerHTML = currentAccounts.map(a => `
         <option value="${a.id}">${a.name} (${a.email})</option>
       `).join('');
 
+      const selectTarget = document.getElementById('ruleSelectTarget');
+      let targetOptions = '<option value="custom">✏️ Manuel PID / Kalıp Gir</option>';
+      currentDetectedApps.forEach(app => {
+        targetOptions += `<option value="${app.pid}">PID: ${app.pid} - ${app.display_name}</option>`;
+      });
+      selectTarget.innerHTML = targetOptions;
+
+      document.getElementById('ruleInputPID').value = '';
       document.getElementById('ruleInputName').value = '';
       document.getElementById('ruleInputPattern').value = '';
       modal.classList.remove('hidden');
       modal.classList.add('flex');
+    }
+
+    function onRuleTargetChange() {
+      const val = document.getElementById('ruleSelectTarget').value;
+      if (val === 'custom') {
+        document.getElementById('ruleInputPID').value = '';
+        document.getElementById('ruleInputName').value = '';
+        document.getElementById('ruleInputPattern').value = '';
+        return;
+      }
+
+      const pid = parseInt(val);
+      const app = currentDetectedApps.find(a => a.pid === pid);
+      if (app) {
+        document.getElementById('ruleInputPID').value = app.pid;
+        document.getElementById('ruleInputName').value = app.display_name;
+        document.getElementById('ruleInputPattern').value = app.display_name;
+
+        // Varsa mevcut atanmış hesabı seç
+        const existingRule = currentAppRules.find(r => r.pid === app.pid);
+        if (existingRule && existingRule.account_id) {
+          document.getElementById('ruleSelectAccount').value = existingRule.account_id;
+        }
+      }
     }
 
     function closeNewRuleModal() {
@@ -1883,22 +2004,35 @@
     }
 
     async function submitNewProgramRule() {
-      const name = document.getElementById('ruleInputName').value.trim() || 'Özel Kural';
+      const pid = parseInt(document.getElementById('ruleInputPID').value) || 0;
+      const name = document.getElementById('ruleInputName').value.trim();
       const pattern = document.getElementById('ruleInputPattern').value.trim();
       const accountId = document.getElementById('ruleSelectAccount').value;
+      const account = currentAccounts.find(a => a.id === accountId);
 
-      if (!pattern) {
-        alert("Lütfen eşleşecek bir program veya script adı (kalıp) girin.");
+      if (pid <= 0 && !pattern) {
+        alert("Lütfen bir Hedef PID numarası veya program kalıbı girin.");
         return;
       }
 
+      let procName = pattern;
+      if (pid > 0) {
+        const app = currentDetectedApps.find(a => a.pid === pid);
+        if (app) procName = app.display_name;
+      }
+
       await saveAppRule({
-        name: name,
+        pid: pid,
+        process_name: procName,
+        name: name || (pid > 0 ? `PID: ${pid} (${procName})` : pattern),
         pattern: pattern,
         account_id: accountId,
+        account_name: account ? account.name : '',
+        account_email: account ? account.email : '',
         enabled: true
       });
       closeNewRuleModal();
+      renderDetectedAppsList();
     }
 
     async function saveAppRule(rule) {
@@ -1911,6 +2045,7 @@
         const data = await res.json();
         currentAppRules = data.rules || [];
         renderAppRulesTable();
+        renderDetectedAppsList();
       } catch (e) {
         alert("Kural kaydedilemedi: " + e.message);
       }
@@ -1923,6 +2058,7 @@
         const data = await res.json();
         currentAppRules = data.rules || [];
         renderAppRulesTable();
+        renderDetectedAppsList();
       } catch (e) {
         alert("Kural silinemedi: " + e.message);
       }

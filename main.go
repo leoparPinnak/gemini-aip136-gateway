@@ -360,7 +360,7 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 
 	// İstek atan sürecin PID, exe ve zenginleştirilmiş görünen adını bul
 	pid, exeName, displayName := GlobalProcessInspector.ResolveClientProcess(r.RemoteAddr)
-	targetAcc, ruleName := GlobalProgramRouter.RouteAccount(exeName, displayName)
+	targetAcc, ruleName := GlobalProgramRouter.RouteAccount(pid, exeName, displayName)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -483,7 +483,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	// İstek atan sürecin PID, exe ve zenginleştirilmiş görünen adını bul
 	pid, exeName, displayName := GlobalProcessInspector.ResolveClientProcess(r.RemoteAddr)
-	targetAcc, ruleName := GlobalProgramRouter.RouteAccount(exeName, displayName)
+	targetAcc, ruleName := GlobalProgramRouter.RouteAccount(pid, exeName, displayName)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
