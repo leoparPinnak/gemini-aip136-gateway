@@ -79,7 +79,7 @@ type GeminiAipPayload struct {
 	Request     GeminiInnerRequest `json:"request"`
 }
 
-// ConvertSchemaTypeToGemini cleans and converts JSON Schema types to UPPERCASE
+// ConvertSchemaTypeToGemini recursively sanitizes and converts JSON Schema to Gemini OpenAPI 3.0 / Protobuf Schema
 func ConvertSchemaTypeToGemini(schema map[string]interface{}) map[string]interface{} {
 	if schema == nil {
 		return map[string]interface{}{"type": "OBJECT", "properties": map[string]interface{}{}}
@@ -89,18 +89,88 @@ func ConvertSchemaTypeToGemini(schema map[string]interface{}) map[string]interfa
 		cloned[k] = v
 	}
 
+	// 1. Convert "const" to "enum" + inferred "type"
+	if constVal, exists := cloned["const"]; exists {
+		if _, hasEnum := cloned["enum"]; !hasEnum {
+			cloned["enum"] = []interface{}{fmt.Sprintf("%v", constVal)}
+		}
+		if _, hasType := cloned["type"]; !hasType {
+			switch constVal.(type) {
+			case string:
+				cloned["type"] = "STRING"
+			case bool:
+				cloned["type"] = "BOOLEAN"
+			case int, int8, int16, int32, int64:
+				cloned["type"] = "INTEGER"
+			case float32, float64:
+				cloned["type"] = "NUMBER"
+			default:
+				cloned["type"] = "STRING"
+			}
+		}
+		delete(cloned, "const")
+	}
+
+	// 2. Type normalization & nullable detection
 	if t, ok := cloned["type"].(string); ok {
 		cloned["type"] = strings.ToUpper(t)
 	} else if arr, ok := cloned["type"].([]interface{}); ok && len(arr) > 0 {
-		if firstStr, ok := arr[0].(string); ok {
-			cloned["type"] = strings.ToUpper(firstStr)
+		var nonNullType string
+		for _, item := range arr {
+			if s, ok := item.(string); ok {
+				if strings.ToLower(s) == "null" {
+					cloned["nullable"] = true
+				} else if nonNullType == "" {
+					nonNullType = strings.ToUpper(s)
+				}
+			}
+		}
+		if nonNullType != "" {
+			cloned["type"] = nonNullType
+		} else {
+			cloned["type"] = "STRING"
 		}
 	}
 
-	delete(cloned, "$schema")
-	delete(cloned, "additionalProperties")
-	delete(cloned, "default")
+	// Auto-infer type if missing
+	if _, hasType := cloned["type"]; !hasType {
+		if cloned["properties"] != nil {
+			cloned["type"] = "OBJECT"
+		} else if cloned["items"] != nil {
+			cloned["type"] = "ARRAY"
+		}
+	}
 
+	// 3. Stringify enum values (Google Protobuf Schema expects repeated string enum)
+	if enumArr, ok := cloned["enum"].([]interface{}); ok {
+		var strEnum []string
+		for _, e := range enumArr {
+			strEnum = append(strEnum, fmt.Sprintf("%v", e))
+		}
+		cloned["enum"] = strEnum
+	}
+
+	// 4. Clean empty required array
+	if reqArr, ok := cloned["required"].([]interface{}); ok && len(reqArr) == 0 {
+		delete(cloned, "required")
+	} else if reqStrArr, ok := cloned["required"].([]string); ok && len(reqStrArr) == 0 {
+		delete(cloned, "required")
+	}
+
+	// 5. Delete unsupported schema keywords in Google Protobuf Schema
+	unsupportedKeys := []string{
+		"$schema", "$id", "$ref", "$comment", "definitions", "$defs",
+		"additionalProperties", "default", "title",
+		"exclusiveMaximum", "exclusiveMinimum",
+		"minProperties", "maxProperties",
+		"patternProperties", "dependencies", "dependentRequired", "dependentSchemas",
+		"uniqueItems", "readOnly", "writeOnly", "examples", "deprecated",
+	}
+	for _, key := range unsupportedKeys {
+		delete(cloned, key)
+	}
+
+	// 6. Recurse into properties
 	if props, ok := cloned["properties"].(map[string]interface{}); ok {
 		newProps := make(map[string]interface{})
 		for pk, pv := range props {
@@ -113,8 +183,58 @@ func ConvertSchemaTypeToGemini(schema map[string]interface{}) map[string]interfa
 		cloned["properties"] = newProps
 	}
 
+	// 7. Recurse into items
 	if items, ok := cloned["items"].(map[string]interface{}); ok {
 		cloned["items"] = ConvertSchemaTypeToGemini(items)
+	} else if itemsArr, ok := cloned["items"].([]interface{}); ok && len(itemsArr) > 0 {
+		if firstMap, ok := itemsArr[0].(map[string]interface{}); ok {
+			cloned["items"] = ConvertSchemaTypeToGemini(firstMap)
+		}
+	}
+
+	// 8. Recurse into oneOf and one_of
+	for _, k := range []string{"oneOf", "one_of"} {
+		if arr, ok := cloned[k].([]interface{}); ok {
+			var newArr []interface{}
+			for _, item := range arr {
+				if itemMap, ok := item.(map[string]interface{}); ok {
+					newArr = append(newArr, ConvertSchemaTypeToGemini(itemMap))
+				} else {
+					newArr = append(newArr, item)
+				}
+			}
+			cloned[k] = newArr
+		}
+	}
+
+	// 9. Recurse into anyOf and any_of
+	for _, k := range []string{"anyOf", "any_of"} {
+		if arr, ok := cloned[k].([]interface{}); ok {
+			var newArr []interface{}
+			for _, item := range arr {
+				if itemMap, ok := item.(map[string]interface{}); ok {
+					newArr = append(newArr, ConvertSchemaTypeToGemini(itemMap))
+				} else {
+					newArr = append(newArr, item)
+				}
+			}
+			cloned[k] = newArr
+		}
+	}
+
+	// 10. Recurse into allOf and all_of
+	for _, k := range []string{"allOf", "all_of"} {
+		if arr, ok := cloned[k].([]interface{}); ok {
+			var newArr []interface{}
+			for _, item := range arr {
+				if itemMap, ok := item.(map[string]interface{}); ok {
+					newArr = append(newArr, ConvertSchemaTypeToGemini(itemMap))
+				} else {
+					newArr = append(newArr, item)
+				}
+			}
+			cloned[k] = newArr
+		}
 	}
 
 	return cloned
@@ -438,7 +558,11 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string) (*Gemi
 
 	// Tools conversion
 	var geminiTools []GeminiTool
-	if toolsArr, ok := body["tools"].([]interface{}); ok && len(toolsArr) > 0 {
+	toolsRaw := body["tools"]
+	if toolsRaw == nil {
+		toolsRaw = body["functions"]
+	}
+	if toolsArr, ok := toolsRaw.([]interface{}); ok && len(toolsArr) > 0 {
 		var decls []GeminiFunctionDeclaration
 		for _, rawT := range toolsArr {
 			t, ok := rawT.(map[string]interface{})
@@ -455,6 +579,9 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string) (*Gemi
 			}
 			desc, _ := fn["description"].(string)
 			params, _ := fn["parameters"].(map[string]interface{})
+			if params == nil {
+				params, _ = fn["input_schema"].(map[string]interface{})
+			}
 
 			decls = append(decls, GeminiFunctionDeclaration{
 				Name:        name,
