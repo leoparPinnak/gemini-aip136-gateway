@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini Gateway Playground</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root {
+      --bg-base: #0b0f19;
+      --bg-surface: #111827;
+      --bg-elevated: #1e293b;
+      --bg-card: #0f172a;
+      --border-color: #334155;
+      --border-focus: #38bdf8;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --primary: #38bdf8;
+      --primary-hover: #0ea5e9;
+      --primary-glow: rgba(56, 189, 248, 0.25);
+      --accent: #818cf8;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #0ea5e9, #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: bold;
+      color: white;
+      box-shadow: 0 0 15px var(--primary-glow);
+    }
+
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .brand-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .server-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 13px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--warning);
+      transition: all 0.3s ease;
+    }
+
+    .status-dot.online {
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    .status-dot.offline {
+      background: var(--danger);
+      box-shadow: 0 0 8px var(--danger);
+    }
+
+    .main-container {
+      flex: 1;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 20px 24px;
+      display: grid;
+      grid-template-columns: 480px 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 1024px) {
+      .main-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-color);
+      background: rgba(30, 41, 59, 0.4);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-body {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .form-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+    }
+
+    .badge-empty {
+      background: rgba(100, 116, 139, 0.2);
+      color: var(--text-muted);
+      border: 1px solid rgba(100, 116, 139, 0.4);
+    }
+
+    .badge-active {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+
+    .badge-optional {
+      color: var(--text-dim);
+      font-size: 11px;
+    }
+
+    input[type="text"], select, textarea {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 13px;
+      padding: 10px 12px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input[type="text"]:focus, select:focus, textarea:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 2px var(--primary-glow);
+    }
+
+    textarea {
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    #systemPrompt {
+      min-height: 80px;
+      border-left: 3px solid var(--accent);
+    }
+
+    #userPrompt {
+      min-height: 120px;
+      border-left: 3px solid var(--primary);
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+    }
+
+    .switch-label {
+      font-size: 13px;
+      color: var(--text-main);
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 42px;
+      height: 22px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: var(--border-color);
+      transition: .3s;
+      border-radius: 22px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--primary);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      outline: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0ea5e9, #2563eb);
+      color: white;
+      flex: 1;
+      box-shadow: 0 4px 14px var(--primary-glow);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #0284c7, #1d4ed8);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.25);
+    }
+
+    .btn-secondary {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+    }
+
+    .btn-secondary:hover {
+      color: var(--text-main);
+      background: var(--border-color);
+    }
+
+    /* Payload Inspector */
+    .payload-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .payload-header {
+      padding: 8px 12px;
+      background: rgba(30, 41, 59, 0.5);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+    }
+
+    .payload-content {
+      padding: 10px 12px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: #cbd5e1;
+      max-height: 180px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      display: none;
+      background: #090d16;
+    }
+
+    .payload-content.open {
+      display: block;
+    }
+
+    /* Response Output Section */
+    .output-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .metrics-bar {
+      display: flex;
+      gap: 16px;
+      padding: 10px 18px;
+      background: rgba(15, 23, 42, 0.8);
+      border-bottom: 1px solid var(--border-color);
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      overflow-x: auto;
+    }
+
+    .metric-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .metric-val {
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .metric-val.cached {
+      color: #34d399;
+    }
+
+    .output-body {
+      padding: 20px;
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Thought / Reasoning Box */
+    .thought-container {
+      background: rgba(30, 41, 59, 0.35);
+      border: 1px solid rgba(129, 140, 248, 0.3);
+      border-radius: 10px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .thought-container.visible {
+      display: block;
+    }
+
+    .thought-header {
+      padding: 10px 14px;
+      background: rgba(99, 102, 241, 0.12);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      font-size: 13px;
+      font-weight: 600;
+      color: #a5b4fc;
+    }
+
+    .thought-body {
+      padding: 14px;
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.6;
+      border-top: 1px solid rgba(129, 140, 248, 0.2);
+      font-style: italic;
+      white-space: pre-wrap;
+      max-height: 280px;
+      overflow-y: auto;
+      background: rgba(15, 23, 42, 0.6);
+    }
+
+    /* Response Markdown Area */
+    .response-container {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-main);
+    }
+
+    .response-container pre {
+      background: #090d16;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 14px;
+      margin: 12px 0;
+      overflow-x: auto;
+      position: relative;
+    }
+
+    .response-container code {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: #38bdf8;
+    }
+
+    .response-container pre code {
+      color: #e2e8f0;
+    }
+
+    .response-container p {
+      margin-bottom: 12px;
+    }
+
+    .response-container ul, .response-container ol {
+      padding-left: 24px;
+      margin-bottom: 12px;
+    }
+
+    .response-container table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 14px 0;
+    }
+
+    .response-container th, .response-container td {
+      border: 1px solid var(--border-color);
+      padding: 8px 12px;
+      text-align: left;
+    }
+
+    .response-container th {
+      background: var(--bg-card);
+    }
+
+    .typing-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 16px;
+      background: var(--primary);
+      margin-left: 4px;
+      animation: blink 0.8s infinite;
+      vertical-align: middle;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-dim);
+      gap: 12px;
+      padding: 60px 20px;
+      text-align: center;
+    }
+
+    .empty-icon {
+      font-size: 40px;
+      opacity: 0.6;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      padding: 4px 8px;
+      font-size: 11px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .copy-btn:hover {
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .alert {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+
+    .alert-danger {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">⚡</div>
+      <div>
+        <div class="brand-title">Gemini AIP-136 Protocol Gateway</div>
+        <div class="brand-sub">OpenAI Responses & Chat Completions Playground</div>
+      </div>
+    </div>
+
+    <div class="server-status" id="serverStatusBadge">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Sunucu Kontrol Ediliyor...</span>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <!-- SOL PANEL: İstek Konfigürasyonu -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>⚙️ İstek Yapılandırması</span>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" id="btnLoadCacheTest">⚡ Cache Test Yükle (25k)</button>
+          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;" id="btnResetDefaults">Sıfırla</button>
+        </div>
+      </div>
+
+      <div class="panel-body">
+        <!-- Gateway URL & Protokol -->
+        <div class="settings-grid">
+          <div class="form-group">
+            <label class="form-label">Gateway Adresi</label>
+            <input type="text" id="gatewayUrl" value="http://127.0.0.1:8000" placeholder="http://127.0.0.1:8000">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Uç Nokta (Format)</label>
+            <select id="apiEndpoint">
+              <option value="/v1/chat/completions">/v1/chat/completions (Chat)</option>
+              <option value="/v1/responses">/v1/responses (Responses API)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Model & Muhakeme Düzeyi -->
+        <div class="settings-grid">
+          <div class="form-group">
+            <label class="form-label">Model</label>
+            <select id="modelSelect">
+              <option value="gemini-3.8-flash-medium" selected>gemini-3.8-flash-medium (Dengeli)</option>
+              <option value="gemini-3.8-flash-high">gemini-3.8-flash-high (Yüksek Muhakeme)</option>
+              <option value="gemini-3.8-flash-low">gemini-3.8-flash-low (Hızlı / Hafif)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Reasoning Effort (Düşünme)</label>
+            <select id="effortSelect">
+              <option value="default" selected>Varsayılan (Model Kararı)</option>
+              <option value="off">off (Düşünme Kapalı - 0 Bütçe)</option>
+              <option value="low">low (Düşük Muhakeme)</option>
+              <option value="high">high (Yüksek Muhakeme)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Akış & Parametreler -->
+        <div class="settings-grid">
+          <div class="switch-row">
+            <span class="switch-label">Canlı Akış (SSE)</span>
+            <label class="switch">
+              <input type="checkbox" id="streamToggle" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="switch-row">
+            <span class="switch-label">Sohbet Geçmişi (Multi-Turn)</span>
+            <label class="switch">
+              <input type="checkbox" id="multiTurnToggle">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Sistem İstemcisi (System Prompt) -->
+        <div class="form-group">
+          <div class="form-label-row">
+            <label class="form-label" for="systemPrompt">
+              <span>Sistem İstemcisi (System Prompt)</span>
+            </label>
+            <span class="badge badge-empty" id="systemPromptBadge">Boş (Gönderilmeyecek)</span>
+          </div>
+          <textarea id="systemPrompt" placeholder="İsteğe bağlı. Boş bırakırsanız istekte HİÇBİR sistem istemi gönderilmez, model saf kullanıcı istemiyle çalışır."></textarea>
+        </div>
+
+        <!-- Kullanıcı İstemcisi (User Prompt) -->
+        <div class="form-group">
+          <div class="form-label-row">
+            <label class="form-label" for="userPrompt">
+              <span>Kullanıcı İstemcisi (User Prompt)</span>
+              <span style="color: var(--danger);">*</span>
+            </label>
+            <span class="badge-optional" id="userCharCount">0 karakter</span>
+          </div>
+          <textarea id="userPrompt" placeholder="Sorunuzu veya talimatınızı buraya yazın... (Göndermek için Ctrl+Enter'a basabilirsiniz)"></textarea>
+        </div>
+
+        <!-- Eylem Butonları -->
+        <div class="button-group">
+          <button class="btn btn-primary" id="btnSend">
+            <span>🚀 Gönder</span>
+            <kbd style="font-size: 10px; opacity: 0.8; background: rgba(0,0,0,0.2); padding: 2px 4px; border-radius: 4px;">Ctrl+Enter</kbd>
+          </button>
+          <button class="btn btn-danger" id="btnStop" disabled>⏹️ Durdur</button>
+          <button class="btn btn-secondary" id="btnClear">🧹 Temizle</button>
+        </div>
+
+        <!-- Payload Önizleme / Doğrulama -->
+        <div class="payload-card">
+          <div class="payload-header" id="payloadHeader">
+            <span>🔍 Gönderilecek İstek JSON Payload'u (Canlı Önizleme)</span>
+            <span id="payloadArrow">▼</span>
+          </div>
+          <pre class="payload-content" id="payloadPreview"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- SAĞ PANEL: Çıktı & Yanıt -->
+    <div class="panel output-panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>💬 Model Yanıtı</span>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;" id="btnCopyResponse">📋 Kopyala</button>
+        </div>
+      </div>
+
+      <!-- Metrik Çubuğu -->
+      <div class="metrics-bar" id="metricsBar">
+        <div class="metric-item">Durum: <span class="metric-val" id="mStatus">Hazır</span></div>
+        <div class="metric-item">Süre: <span class="metric-val" id="mDuration">-</span></div>
+        <div class="metric-item">Prompt: <span class="metric-val" id="mPromptTokens">0</span></div>
+        <div class="metric-item">Cache: <span class="metric-val cached" id="mCachedTokens">0</span></div>
+        <div class="metric-item">Output: <span class="metric-val" id="mOutputTokens">0</span></div>
+        <div class="metric-item">Toplam: <span class="metric-val" id="mTotalTokens">0</span></div>
+      </div>
+
+      <div class="output-body" id="outputBody">
+        <div class="alert alert-danger" id="errorAlert"></div>
+
+        <!-- Düşünme / Muhakeme Kutusu -->
+        <div class="thought-container" id="thoughtContainer">
+          <div class="thought-header" id="thoughtHeader">
+            <span>🧠 Model Düşünme Süreci (Reasoning)</span>
+            <span id="thoughtDurationBadge" style="font-size: 11px; opacity: 0.8;"></span>
+          </div>
+          <div class="thought-body" id="thoughtBody"></div>
+        </div>
+
+        <!-- Asistan Yanıtı -->
+        <div class="response-container" id="responseContainer">
+          <div class="empty-state" id="emptyState">
+            <div class="empty-icon">✨</div>
+            <p>Bir sistem istemi (isteğe bağlı) ve kullanıcı istemi girip <strong>Gönder</strong> butonuna tıklayın.</p>
+            <p style="font-size: 12px; color: var(--text-dim);">Sistem istemi boş bırakıldığında gövdede hiçbir system mesajı yer almaz.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // DOM Elementleri
+    const gatewayUrlEl = document.getElementById('gatewayUrl');
+    const apiEndpointEl = document.getElementById('apiEndpoint');
+    const modelSelectEl = document.getElementById('modelSelect');
+    const effortSelectEl = document.getElementById('effortSelect');
+    const streamToggleEl = document.getElementById('streamToggle');
+    const systemPromptEl = document.getElementById('systemPrompt');
+    const systemPromptBadge = document.getElementById('systemPromptBadge');
+    const userPromptEl = document.getElementById('userPrompt');
+    const userCharCountEl = document.getElementById('userCharCount');
+    const btnSend = document.getElementById('btnSend');
+    const btnStop = document.getElementById('btnStop');
+    const btnClear = document.getElementById('btnClear');
+    const btnResetDefaults = document.getElementById('btnResetDefaults');
+    const btnLoadCacheTest = document.getElementById('btnLoadCacheTest');
+    const multiTurnToggle = document.getElementById('multiTurnToggle');
+    const btnCopyResponse = document.getElementById('btnCopyResponse');
+    const payloadHeader = document.getElementById('payloadHeader');
+    const payloadPreview = document.getElementById('payloadPreview');
+    const payloadArrow = document.getElementById('payloadArrow');
+    const serverStatusBadge = document.getElementById('serverStatusBadge');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const thoughtContainer = document.getElementById('thoughtContainer');
+    const thoughtHeader = document.getElementById('thoughtHeader');
+    const thoughtBody = document.getElementById('thoughtBody');
+    const thoughtDurationBadge = document.getElementById('thoughtDurationBadge');
+    const responseContainer = document.getElementById('responseContainer');
+    const emptyState = document.getElementById('emptyState');
+    const errorAlert = document.getElementById('errorAlert');
+
+    // Metrikler
+    const mStatus = document.getElementById('mStatus');
+    const mDuration = document.getElementById('mDuration');
+    const mPromptTokens = document.getElementById('mPromptTokens');
+    const mCachedTokens = document.getElementById('mCachedTokens');
+    const mOutputTokens = document.getElementById('mOutputTokens');
+    const mTotalTokens = document.getElementById('mTotalTokens');
+
+    let abortController = null;
+    let fullOutputText = '';
+    let fullThoughtText = '';
+    let reqStartTime = 0;
+    let isGenerating = false;
+
+    let conversationHistory = [];
+
+    // Canlı Sistem İstemi Rozeti ve Payload Güncellemesi
+    function updateSystemPromptBadge() {
+      const val = systemPromptEl.value.trim();
+      if (val.length > 0) {
+        systemPromptBadge.textContent = '🟢 Aktif (Gönderilecek)';
+        systemPromptBadge.className = 'badge badge-active';
+      } else {
+        systemPromptBadge.textContent = '🔘 Boş (Gönderilmeyecek)';
+        systemPromptBadge.className = 'badge badge-empty';
+      }
+      updatePayloadPreview();
+    }
+
+    // Gönderilecek JSON Payload'unu Hazırla
+    function buildPayload() {
+      const endpoint = apiEndpointEl.value;
+      const model = modelSelectEl.value;
+      const effort = effortSelectEl.value;
+      const stream = streamToggleEl.checked;
+      const systemPrompt = systemPromptEl.value.trim();
+      const userPrompt = userPromptEl.value;
+
+      const payload = {
+        model: model,
+        stream: stream
+      };
+
+      if (effort !== 'default') {
+        payload.reasoning_effort = effort;
+      }
+
+      if (endpoint === '/v1/chat/completions') {
+        const messages = [];
+        // KRİTİK KURAL: Sistem istemi sadece doluysa eklenir
+        if (systemPrompt.length > 0) {
+          messages.push({
+            role: "system",
+            content: systemPrompt
+          });
+        }
+        // Çok turlu sohbet geçmişi
+        if (multiTurnToggle && multiTurnToggle.checked && conversationHistory.length > 0) {
+          messages.push(...conversationHistory);
+        }
+        messages.push({
+          role: "user",
+          content: userPrompt || ""
+        });
+        payload.messages = messages;
+      } else {
+        // Responses API (/v1/responses)
+        // KRİTİK KURAL: Sistem istemi sadece doluysa instructions eklenir
+        if (systemPrompt.length > 0) {
+          payload.instructions = systemPrompt;
+        }
+        payload.input = [
+          {
+            role: "user",
+            content: userPrompt || ""
+          }
+        ];
+      }
+
+      return payload;
+    }
+
+    function updatePayloadPreview() {
+      const payload = buildPayload();
+      payloadPreview.textContent = JSON.stringify(payload, null, 2);
+    }
+
+    // Payload Göster/Gizle
+    payloadHeader.addEventListener('click', () => {
+      payloadPreview.classList.toggle('open');
+      payloadArrow.textContent = payloadPreview.classList.contains('open') ? '▲' : '▼';
+    });
+
+    // Event Dinleyicileri
+    systemPromptEl.addEventListener('input', updateSystemPromptBadge);
+    userPromptEl.addEventListener('input', () => {
+      userCharCountEl.textContent = `${userPromptEl.value.length} karakter`;
+      updatePayloadPreview();
+    });
+    apiEndpointEl.addEventListener('change', updatePayloadPreview);
+    modelSelectEl.addEventListener('change', updatePayloadPreview);
+    effortSelectEl.addEventListener('change', updatePayloadPreview);
+    streamToggleEl.addEventListener('change', updatePayloadPreview);
+
+    // Ctrl+Enter Kısayolu
+    userPromptEl.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (!isGenerating) {
+          btnSend.click();
+        }
+      }
+    });
+
+    // Sunucu Sağlık Kontrolü
+    async function checkServerHealth() {
+      const base = gatewayUrlEl.value.trim().replace(/\/+$/, '');
+      try {
+        const startTime = Date.now();
+        const res = await fetch(`${base}/health`, { method: 'GET', signal: AbortSignal.timeout(2500) });
+        if (res.ok) {
+          const data = await res.json();
+          const latency = Date.now() - startTime;
+          statusDot.className = 'status-dot online';
+          statusText.textContent = `Çevrimiçi (${latency}ms | Cache: ${data.stats?.cacheHitRatio || '0%'})`;
+        } else {
+          statusDot.className = 'status-dot offline';
+          statusText.textContent = `Sunucu Hatası (${res.status})`;
+        }
+      } catch (err) {
+        statusDot.className = 'status-dot offline';
+        statusText.textContent = 'Bağlantı Yok (Sunucu Kapalı)';
+      }
+    }
+
+    setInterval(checkServerHealth, 5000);
+    checkServerHealth();
+
+    // Markdown Derleyici
+    function renderMarkdown(text) {
+      if (window.marked) {
+        try {
+          return marked.parse(text);
+        } catch (e) {
+          // Fallback
+        }
+      }
+      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
+    }
+
+    // Temizle Butonu
+    btnClear.addEventListener('click', () => {
+      conversationHistory = [];
+      systemPromptEl.value = '';
+      userPromptEl.value = '';
+      userCharCountEl.textContent = '0 karakter';
+      updateSystemPromptBadge();
+      fullOutputText = '';
+      fullThoughtText = '';
+      thoughtContainer.classList.remove('visible');
+      thoughtBody.textContent = '';
+      responseContainer.innerHTML = '';
+      responseContainer.appendChild(emptyState);
+      emptyState.style.display = 'flex';
+      errorAlert.style.display = 'none';
+      mStatus.textContent = 'Hazır';
+      mDuration.textContent = '-';
+      mPromptTokens.textContent = '0';
+      mCachedTokens.textContent = '0';
+      mOutputTokens.textContent = '0';
+      mTotalTokens.textContent = '0';
+    });
+
+    btnResetDefaults.addEventListener('click', () => {
+      gatewayUrlEl.value = 'http://127.0.0.1:8000';
+      apiEndpointEl.value = '/v1/chat/completions';
+      modelSelectEl.value = 'gemini-3.8-flash-medium';
+      effortSelectEl.value = 'default';
+      streamToggleEl.checked = true;
+      if (multiTurnToggle) multiTurnToggle.checked = false;
+      conversationHistory = [];
+      updatePayloadPreview();
+      checkServerHealth();
+    });
+
+    // Cache Test Verisi Yükleyici
+    btnLoadCacheTest.addEventListener('click', () => {
+      modelSelectEl.value = 'gemini-3.8-flash-high';
+      const repeatBlock = "Enterprise cloud distributed architecture with consensus raft cluster, zero-trust network mTLS, distributed transaction saga pattern. ";
+      const big25k = "### KURUMSAL BULUT MİMARİSİ VE GÜVENLİK STANDARTLARI ŞARTNAMESİ ###\n\n" + repeatBlock.repeat(1100);
+      systemPromptEl.value = big25k;
+      userPromptEl.value = "What is this text about in 3 words?";
+      updateSystemPromptBadge();
+      userCharCountEl.textContent = `${userPromptEl.value.length} karakter`;
+      alert("✅ 25.000 Token'lık Cache Test Verisi Yüklendi (Model: gemini-3.8-flash-high)!\n\n1. İstek (Şimdi Gönderin): Model 25k veriyi işleyecek -> Cache: 0.\n2. İstek (Sistem istemine dokunmadan soruyu değiştirip Gönderin): -> Cache: 20.450 YEŞİL ⚡ HIT alacaksınız!");
+    });
+
+    // Kopyalama
+    btnCopyResponse.addEventListener('click', () => {
+      if (!fullOutputText) return;
+      navigator.clipboard.writeText(fullOutputText).then(() => {
+        const orig = btnCopyResponse.textContent;
+        btnCopyResponse.textContent = '✓ Kopyalandı!';
+        setTimeout(() => btnCopyResponse.textContent = orig, 1500);
+      });
+    });
+
+    // Düşünme kutusu aç/kapa
+    thoughtHeader.addEventListener('click', () => {
+      thoughtBody.style.display = thoughtBody.style.display === 'none' ? 'block' : 'none';
+    });
+
+    // Durdur Butonu
+    btnStop.addEventListener('click', () => {
+      if (abortController) {
+        abortController.abort();
+        abortController = null;
+      }
+      finishGeneration('Durduruldu');
+    });
+
+    function finishGeneration(statusMsg = 'Tamamlandı') {
+      isGenerating = false;
+      btnSend.disabled = false;
+      btnStop.disabled = true;
+      mStatus.textContent = statusMsg;
+
+      // Çok turlu sohbet geçmişi kaydı
+      if (multiTurnToggle && multiTurnToggle.checked && fullOutputText) {
+        conversationHistory.push({ role: 'user', content: userPromptEl.value });
+        conversationHistory.push({ role: 'assistant', content: fullOutputText });
+      }
+
+      // Son render
+      if (fullOutputText) {
+        responseContainer.innerHTML = renderMarkdown(fullOutputText);
+      }
+    }
+
+    // İSTEK GÖNDERME
+    btnSend.addEventListener('click', async () => {
+      const userText = userPromptEl.value.trim();
+      if (!userText) {
+        alert('Lütfen bir Kullanıcı İstemcisi (User Prompt) yazın.');
+        userPromptEl.focus();
+        return;
+      }
+
+      errorAlert.style.display = 'none';
+      emptyState.style.display = 'none';
+      responseContainer.innerHTML = '<span class="typing-cursor"></span>';
+      thoughtContainer.classList.remove('visible');
+      thoughtBody.textContent = '';
+      thoughtBody.style.display = 'block';
+      fullOutputText = '';
+      fullThoughtText = '';
+
+      mPromptTokens.textContent = '...';
+      mOutputTokens.textContent = '...';
+      mTotalTokens.textContent = '...';
+      mCachedTokens.textContent = '...';
+      mDuration.textContent = '...';
+
+      const base = gatewayUrlEl.value.trim().replace(/\/+$/, '');
+      const endpoint = apiEndpointEl.value;
+      const url = `${base}${endpoint}`;
+      const payload = buildPayload();
+      const isStream = payload.stream;
+
+      isGenerating = true;
+      btnSend.disabled = true;
+      btnStop.disabled = false;
+      mStatus.textContent = 'İstek Gönderildi...';
+      reqStartTime = Date.now();
+
+      abortController = new AbortController();
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer local-test-key'
+          },
+          body: JSON.stringify(payload),
+          signal: abortController.signal
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`HTTP ${response.status} (${response.statusText}): ${errText}`);
+        }
+
+        mStatus.textContent = 'Yanıt Alınıyor...';
+
+        if (isStream) {
+          // STREAMING MODU (SSE)
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder('utf-8');
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // Kalan tamamlanmamış satır
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || trimmed.startsWith(':')) continue;
+
+              if (trimmed.startsWith('data: ')) {
+                const dataStr = trimmed.slice(6).trim();
+                if (dataStr === '[DONE]') {
+                  finishGeneration('Tamamlandı');
+                  continue;
+                }
+
+                try {
+                  const chunk = JSON.parse(dataStr);
+
+                  // 1. Chat Completions formatı
+                  if (endpoint === '/v1/chat/completions') {
+                    if (chunk.choices && chunk.choices[0]) {
+                      const delta = chunk.choices[0].delta || {};
+
+                      // Düşünme / Muhakeme metni
+                      if (delta.reasoning_content) {
+                        fullThoughtText += delta.reasoning_content;
+                        thoughtBody.textContent = fullThoughtText;
+                        thoughtContainer.classList.add('visible');
+                      }
+
+                      // Asıl çıktı metni
+                      if (delta.content) {
+                        fullOutputText += delta.content;
+                        responseContainer.innerHTML = renderMarkdown(fullOutputText) + '<span class="typing-cursor"></span>';
+                      }
+                    }
+                  } else {
+                    // 2. Responses API formatı (/v1/responses)
+                    if (chunk.type === 'response.reasoning_text.delta') {
+                      fullThoughtText += chunk.delta || '';
+                      thoughtBody.textContent = fullThoughtText;
+                      thoughtContainer.classList.add('visible');
+                    } else if (chunk.type === 'response.output_text.delta') {
+                      fullOutputText += chunk.delta || '';
+                      responseContainer.innerHTML = renderMarkdown(fullOutputText) + '<span class="typing-cursor"></span>';
+                    }
+                  }
+
+                  // Token kullanım metrikleri (Her iki format için genel yakalayıcı)
+                  const u = chunk.usage || chunk.response?.usage;
+                  if (u) {
+                    const promptTok = u.prompt_tokens ?? u.input_tokens ?? 0;
+                    const outputTok = u.completion_tokens ?? u.output_tokens ?? 0;
+                    const totalTok = u.total_tokens ?? (promptTok + outputTok);
+                    const cachedTok = u.prompt_tokens_details?.cached_tokens ?? u.input_tokens_details?.cached_tokens ?? 0;
+
+                    mPromptTokens.textContent = promptTok.toLocaleString();
+                    mOutputTokens.textContent = outputTok.toLocaleString();
+                    mTotalTokens.textContent = totalTok.toLocaleString();
+                    if (cachedTok > 0) {
+                      mCachedTokens.innerHTML = `${cachedTok.toLocaleString()} <span style="background: rgba(52, 211, 153, 0.25); color: #34d399; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; border: 1px solid rgba(52, 211, 153, 0.4);">⚡ HIT!</span>`;
+                    } else {
+                      mCachedTokens.textContent = '0';
+                    }
+                  }
+
+                  // Canlı süre güncelleme
+                  const elapsed = Date.now() - reqStartTime;
+                  mDuration.textContent = `${elapsed}ms`;
+
+                } catch (jsonErr) {
+                  // SSE parse hatası yok sayılır
+                }
+              }
+            }
+          }
+
+          finishGeneration('Tamamlandı');
+
+        } else {
+          // NON-STREAMING MODU
+          const data = await response.json();
+          const elapsed = Date.now() - reqStartTime;
+          mDuration.textContent = `${elapsed}ms`;
+
+          if (endpoint === '/v1/chat/completions') {
+            const msg = data.choices?.[0]?.message || {};
+            if (msg.reasoning_content) {
+              fullThoughtText = msg.reasoning_content;
+              thoughtBody.textContent = fullThoughtText;
+              thoughtContainer.classList.add('visible');
+            }
+            fullOutputText = msg.content || '';
+
+          } else {
+            // Responses format
+            if (data.output) {
+              for (const item of data.output) {
+                if (item.type === 'reasoning' && item.reasoning_text) {
+                  fullThoughtText = item.reasoning_text;
+                  thoughtBody.textContent = fullThoughtText;
+                  thoughtContainer.classList.add('visible');
+                } else if (item.type === 'message' && item.content) {
+                  for (const c of item.content) {
+                    if (c.text) fullOutputText += c.text;
+                  }
+                }
+              }
+            }
+          }
+
+          if (data.usage) {
+            const promptTok = data.usage.prompt_tokens ?? data.usage.input_tokens ?? 0;
+            const outputTok = data.usage.completion_tokens ?? data.usage.output_tokens ?? 0;
+            const totalTok = data.usage.total_tokens ?? (promptTok + outputTok);
+            const cachedTok = data.usage.prompt_tokens_details?.cached_tokens ?? data.usage.input_tokens_details?.cached_tokens ?? 0;
+
+            mPromptTokens.textContent = promptTok.toLocaleString();
+            mOutputTokens.textContent = outputTok.toLocaleString();
+            mTotalTokens.textContent = totalTok.toLocaleString();
+            if (cachedTok > 0) {
+              mCachedTokens.innerHTML = `${cachedTok.toLocaleString()} <span style="background: rgba(52, 211, 153, 0.25); color: #34d399; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; border: 1px solid rgba(52, 211, 153, 0.4);">⚡ HIT!</span>`;
+            } else {
+              mCachedTokens.textContent = '0';
+            }
+          }
+
+          responseContainer.innerHTML = renderMarkdown(fullOutputText);
+          finishGeneration('Tamamlandı');
+        }
+
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          mStatus.textContent = 'Durduruldu';
+        } else {
+          mStatus.textContent = 'Hata Oluştu';
+          errorAlert.textContent = `Hata: ${err.message}`;
+          errorAlert.style.display = 'block';
+        }
+        finishGeneration(mStatus.textContent);
+      }
+    });
+
+    // Başlangıç payload'ını çiz
+    updateSystemPromptBadge();
+  </script>
+</body>
+</html>

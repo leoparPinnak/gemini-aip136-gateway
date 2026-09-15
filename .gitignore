@@ -1,0 +1,21 @@
+# Binaries & Temporary files
+*.exe~
+*.tmp
+*.log
+*.bak
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
