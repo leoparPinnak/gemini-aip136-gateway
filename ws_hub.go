@@ -27,11 +27,14 @@ type LiveRequestInfo struct {
 	IsOverridden   bool   `json:"is_overridden"`
 	Status         string `json:"status"` // "running", "completed", "error"
 	DurationMs     int64  `json:"duration_ms"`
-	InputTokens    int    `json:"input_tokens"`
-	OutputTokens   int    `json:"output_tokens"`
-	CachedTokens   int    `json:"cached_tokens"`
-	CacheHit       bool   `json:"cache_hit"`
-	ErrorMsg       string `json:"error_msg,omitempty"`
+	InputTokens         int    `json:"input_tokens"`
+	OutputTokens        int    `json:"output_tokens"`
+	CachedTokens        int    `json:"cached_tokens"`
+	CacheHit            bool   `json:"cache_hit"`
+	AssignedAccount     string `json:"assigned_account,omitempty"`
+	AssignedAccountName string `json:"assigned_account_name,omitempty"`
+	RoutingRule         string `json:"routing_rule,omitempty"`
+	ErrorMsg            string `json:"error_msg,omitempty"`
 }
 
 type WSHub struct {

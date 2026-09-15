@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -288,6 +289,63 @@ func handleProcessInspectAPI(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(report)
 }
 
+func handleProgramRulesAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method == http.MethodGet {
+		rules := GlobalProgramRouter.GetRules()
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"rules": rules,
+		})
+		return
+	}
+	if r.Method == http.MethodPost {
+		var rule ProgramRule
+		if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if rule.AccountID != "" && GlobalAccountStore != nil {
+			if acc := GlobalAccountStore.GetAccountByID(rule.AccountID); acc != nil {
+				rule.AccountEmail = acc.Email
+				rule.AccountName = acc.Name
+			}
+		}
+		if err := GlobalProgramRouter.AddOrUpdateRule(rule); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "ok",
+			"rules":  GlobalProgramRouter.GetRules(),
+		})
+		return
+	}
+	if r.Method == http.MethodDelete {
+		id := r.URL.Query().Get("id")
+		if id != "" {
+			_ = GlobalProgramRouter.DeleteRule(id)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "ok",
+			"rules":  GlobalProgramRouter.GetRules(),
+		})
+		return
+	}
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+func handleDetectedProgramsAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if GlobalProcessInspector == nil {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"programs": []ProcessDetail{}})
+		return
+	}
+	procs := GlobalProcessInspector.GetDetectedPrograms()
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"programs": procs,
+	})
+}
+
 func handleResponses(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -300,8 +358,9 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 	reqStart := time.Now()
 	reqID := fmt.Sprintf("resp_%d", reqStart.UnixMilli())
 
-	// İstek atan sürecin PID ve adını bul
-	pid, procName := GlobalProcessInspector.ResolveClientProcess(r.RemoteAddr)
+	// İstek atan sürecin PID, exe ve zenginleştirilmiş görünen adını bul
+	pid, exeName, displayName := GlobalProcessInspector.ResolveClientProcess(r.RemoteAddr)
+	targetAcc, ruleName := GlobalProgramRouter.RouteAccount(exeName, displayName)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -335,23 +394,33 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 		effortStr = "high / auto"
 	}
 
+	targetEmail := ""
+	targetName := ""
+	if targetAcc != nil {
+		targetEmail = targetAcc.Email
+		targetName = targetAcc.Name
+	}
+
 	// Canlı İstek Başlangıç Bildirimi
 	reqInfo := LiveRequestInfo{
-		ID:             reqID,
-		Timestamp:      reqStart.Format("15:04:05"),
-		PID:            pid,
-		ProcessName:    procName,
-		Protocol:       "OpenAI Responses API",
-		RequestedModel: modelName,
-		AppliedModel:   targetModel,
-		ThinkingEffort: effortStr,
-		IsOverridden:   isOverridden,
-		Status:         "running",
+		ID:                  reqID,
+		Timestamp:           reqStart.Format("15:04:05"),
+		PID:                 pid,
+		ProcessName:         displayName,
+		Protocol:            "OpenAI Responses API",
+		RequestedModel:      modelName,
+		AppliedModel:        targetModel,
+		ThinkingEffort:      effortStr,
+		IsOverridden:        isOverridden,
+		AssignedAccount:     targetEmail,
+		AssignedAccountName: targetName,
+		RoutingRule:         ruleName,
+		Status:              "running",
 	}
 	BroadcastRequestEvent(reqInfo)
 
-	log.Printf("[POST /v1/responses] PID: %d (%s) | Model: %s -> %s (Override: %v)\n",
-		pid, procName, modelName, targetModel, isOverridden)
+	log.Printf("[POST /v1/responses] PID: %d (%s) | Hesap: %s [%s] | Model: %s -> %s\n",
+		pid, displayName, targetEmail, ruleName, modelName, targetModel)
 
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, no-transform")
@@ -360,7 +429,7 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 
 	translator := NewStreamTranslator(w, true, modelName)
 
-	err = GlobalGeminiClient.StreamGenerateContent(payload, func(chunk *GeminiStreamChunk) error {
+	err = GlobalGeminiClient.StreamGenerateContentWithAccount(payload, targetAcc, func(chunk *GeminiStreamChunk) error {
 		translator.HandleGeminiChunk(chunk)
 		return nil
 	})
@@ -412,8 +481,9 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	reqStart := time.Now()
 	reqID := fmt.Sprintf("chatcmpl_%d", reqStart.UnixMilli())
 
-	// İstek atan sürecin PID ve adını bul
-	pid, procName := GlobalProcessInspector.ResolveClientProcess(r.RemoteAddr)
+	// İstek atan sürecin PID, exe ve zenginleştirilmiş görünen adını bul
+	pid, exeName, displayName := GlobalProcessInspector.ResolveClientProcess(r.RemoteAddr)
+	targetAcc, ruleName := GlobalProgramRouter.RouteAccount(exeName, displayName)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -451,22 +521,32 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		effortStr = "high / auto"
 	}
 
+	targetEmail := ""
+	targetName := ""
+	if targetAcc != nil {
+		targetEmail = targetAcc.Email
+		targetName = targetAcc.Name
+	}
+
 	reqInfo := LiveRequestInfo{
-		ID:             reqID,
-		Timestamp:      reqStart.Format("15:04:05"),
-		PID:            pid,
-		ProcessName:    procName,
-		Protocol:       "Chat Completions",
-		RequestedModel: modelName,
-		AppliedModel:   targetModel,
-		ThinkingEffort: effortStr,
-		IsOverridden:   isOverridden,
-		Status:         "running",
+		ID:                  reqID,
+		Timestamp:           reqStart.Format("15:04:05"),
+		PID:                 pid,
+		ProcessName:         displayName,
+		Protocol:            "Chat Completions",
+		RequestedModel:      modelName,
+		AppliedModel:        targetModel,
+		ThinkingEffort:      effortStr,
+		IsOverridden:        isOverridden,
+		AssignedAccount:     targetEmail,
+		AssignedAccountName: targetName,
+		RoutingRule:         ruleName,
+		Status:              "running",
 	}
 	BroadcastRequestEvent(reqInfo)
 
-	log.Printf("[POST /v1/chat/completions] PID: %d (%s) | Model: %s -> %s (Override: %v) | Stream: %v\n",
-		pid, procName, modelName, targetModel, isOverridden, isStream)
+	log.Printf("[POST /v1/chat/completions] PID: %d (%s) | Hesap: %s [%s] | Model: %s -> %s | Stream: %v\n",
+		pid, displayName, targetEmail, ruleName, modelName, targetModel, isStream)
 
 	if isStream {
 		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
@@ -476,7 +556,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 		translator := NewStreamTranslator(w, false, modelName)
 
-		err = GlobalGeminiClient.StreamGenerateContent(payload, func(chunk *GeminiStreamChunk) error {
+		err = GlobalGeminiClient.StreamGenerateContentWithAccount(payload, targetAcc, func(chunk *GeminiStreamChunk) error {
 			translator.HandleGeminiChunk(chunk)
 			return nil
 		})
@@ -523,7 +603,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		var fnCalls []GeminiFunctionCall
 		var usage *GeminiUsageMetadata
 
-		err = GlobalGeminiClient.StreamGenerateContent(payload, func(chunk *GeminiStreamChunk) error {
+		err = GlobalGeminiClient.StreamGenerateContentWithAccount(payload, targetAcc, func(chunk *GeminiStreamChunk) error {
 			if chunk.Response.UsageMetadata != nil {
 				usage = chunk.Response.UsageMetadata
 			} else if chunk.UsageMetadata != nil {
@@ -643,6 +723,9 @@ func main() {
 	// 3. İstek Yapan Program / PID İzleyicisini Başlat
 	InitProcessInspector()
 
+	// 4. Program Bazlı Akıllı Hesap Yönlendiricisini Başlat
+	InitProgramRouter("program_rules.json")
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleHealth)
 	mux.HandleFunc("/health", handleHealth)
@@ -672,6 +755,10 @@ func main() {
 	// Süreç ve Ağ Port İnceleme API
 	mux.HandleFunc("/api/process/inspect", handleProcessInspectAPI)
 
+	// Program Bazlı Hesap Yönlendirme API
+	mux.HandleFunc("/api/program-rules", handleProgramRulesAPI)
+	mux.HandleFunc("/api/detected-programs", handleDetectedProgramsAPI)
+
 	handler := corsMiddleware(mux)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
@@ -682,6 +769,7 @@ func main() {
 	fmt.Printf("🖥️  Modern Dashboard UI  : http://%s/ui\n", addr)
 	fmt.Printf("🔌 Canlı WebSocket       : ws://%s/ws\n", addr)
 	fmt.Printf("👥 Çoklu Hesap Kasası   : /api/accounts\n")
+	fmt.Printf("🎯 Program Yönlendirme  : /api/program-rules\n")
 	fmt.Printf("📡 OpenAI Responses     : http://%s/v1/responses\n", addr)
 	fmt.Printf("📡 Chat Completions     : http://%s/v1/chat/completions\n", addr)
 	fmt.Printf("📊 Sağlık & Metrikler   : http://%s/health\n", addr)
@@ -692,6 +780,13 @@ func main() {
 		Handler:      handler,
 		ReadTimeout:  10 * time.Minute,
 		WriteTimeout: 10 * time.Minute,
+		ConnState: func(conn net.Conn, state http.ConnState) {
+			if state == http.StateNew || state == http.StateActive {
+				if GlobalProcessInspector != nil {
+					GlobalProcessInspector.RegisterSocket(conn.RemoteAddr().String())
+				}
+			}
+		},
 	}
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

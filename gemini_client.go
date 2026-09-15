@@ -73,9 +73,19 @@ func (c *GeminiClient) StreamGenerateContent(
 	payload *GeminiAipPayload,
 	onChunk func(chunk *GeminiStreamChunk) error,
 ) error {
+	return c.StreamGenerateContentWithAccount(payload, nil, onChunk)
+}
+
+func (c *GeminiClient) StreamGenerateContentWithAccount(
+	payload *GeminiAipPayload,
+	acc *Account,
+	onChunk func(chunk *GeminiStreamChunk) error,
+) error {
 	var token string
 	var err error
-	if GlobalAccountStore != nil {
+	if acc != nil && GlobalAccountStore != nil {
+		token, err = GlobalAccountStore.GetTokenForAccount(acc)
+	} else if GlobalAccountStore != nil {
 		token, err = GlobalAccountStore.GetActiveToken()
 	}
 	if token == "" || err != nil {

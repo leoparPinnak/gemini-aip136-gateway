@@ -10,6 +10,7 @@ go_gateway.exe
 accounts.json
 oauth_sessions.json
 override_settings.json
+program_rules.json
 
 # OS generated files
 Thumbs.db

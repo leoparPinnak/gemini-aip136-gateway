@@ -224,6 +224,19 @@ func (s *AccountStore) GetActiveAccount() *Account {
 	return nil
 }
 
+func (s *AccountStore) GetAccountByID(idOrEmail string) *Account {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, acc := range s.Accounts {
+		if acc.ID == idOrEmail || strings.EqualFold(acc.Email, idOrEmail) {
+			return acc
+		}
+	}
+	return nil
+}
+
+
 func (s *AccountStore) SetActiveAccount(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -469,6 +482,13 @@ func (s *AccountStore) RefreshAllQuotas() {
 
 func (s *AccountStore) GetActiveToken() (string, error) {
 	acc := s.GetActiveAccount()
+	return s.GetTokenForAccount(acc)
+}
+
+func (s *AccountStore) GetTokenForAccount(acc *Account) (string, error) {
+	if acc == nil {
+		acc = s.GetActiveAccount()
+	}
 	if acc == nil {
 		// Fallback GlobalAuth
 		return GlobalAuth.GetValidToken()
