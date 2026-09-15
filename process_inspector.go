@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"net"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -84,6 +85,9 @@ func (pi *ProcessInspector) refresh() {
 				localAddr := fields[1]
 				pidStr := fields[len(fields)-1]
 				if pid, err := strconv.Atoi(pidStr); err == nil {
+					if pid == os.Getpid() {
+						continue // Gateway'in kendi soketlerini istemci haritasına yazmasın
+					}
 					// localAddr portu
 					if _, portStr, err := net.SplitHostPort(localAddr); err == nil {
 						if p, err := strconv.Atoi(portStr); err == nil {
@@ -131,16 +135,23 @@ func (pi *ProcessInspector) ResolveClientProcess(remoteAddr string) (int, string
 		return pid, name
 	}
 
-	// Anlık port haritasında yoksa hemen aktif TCP tablosunda ara
+	myPID := os.Getpid()
+
+	// 1. Anlık port haritasında yoksa hemen aktif TCP tablosunda ara
 	cmd := exec.Command("netstat", "-ano", "-p", "tcp")
 	if out, err := cmd.Output(); err == nil {
 		scanner := bufio.NewScanner(bytes.NewReader(out))
 		for scanner.Scan() {
 			line := scanner.Text()
-			if strings.Contains(line, ":"+portStr+" ") {
-				fields := strings.Fields(line)
-				if len(fields) >= 5 {
+			fields := strings.Fields(line)
+			if len(fields) >= 5 && strings.HasPrefix(line, "TCP") {
+				localAddr := fields[1]
+				// İstemcinin Local Address portu bizim aradığımız port mu?
+				if strings.HasSuffix(localAddr, ":"+portStr) {
 					if foundPid, err := strconv.Atoi(fields[len(fields)-1]); err == nil && foundPid > 0 {
+						if foundPid == myPID {
+							continue // Gateway'in kendi sunucu sürecini istemci olarak işaretlemesin
+						}
 						pi.mu.RLock()
 						procName := pi.pidToName[foundPid]
 						pi.mu.RUnlock()
