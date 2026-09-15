@@ -170,8 +170,163 @@
       background: oklch(1 0 0 / 15%);
       border-radius: 3px;
     }
-    ::-webkit-scrollbar-thumb:hover {
-      background: oklch(1 0 0 / 25%);
+    /* ========================================== */
+    /* JAKUB ANTALIK METAL-FX CHROMATIC SUITE     */
+    /* ========================================== */
+
+    /* Ana Buton Gövdesi */
+    .metal-btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      padding: 0.55rem 1.25rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-radius: 9999px;
+      color: #ffffff;
+      background: #18181b;
+      cursor: pointer;
+      text-decoration: none;
+      isolation: isolate;
+      border: none;
+      outline: none;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s;
+    }
+
+    .metal-btn:hover {
+      transform: scale(1.03);
+    }
+    .metal-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* 1. İkili Işık Pahı (Üst Dudak Beyaz Parlama, Alt Dudak Derin Gölge) */
+    .metal-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      z-index: 3;
+      box-shadow: 
+        inset 0 1px 1px 0 rgba(255, 255, 255, 0.45),
+        inset 0 -1px 1px 0 rgba(0, 0, 0, 0.6);
+    }
+
+    /* 2. Dış Kromatik Işıma (Hover'da Büyüyen Mor/Mavi Halo) */
+    .metal-btn::after {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      pointer-events: none;
+      z-index: 2;
+      box-shadow: 0 0 16px -2px rgba(96, 165, 250, 0.35);
+      transition: box-shadow 0.3s ease;
+    }
+    .metal-btn:hover::after {
+      box-shadow: 0 0 24px 2px rgba(168, 85, 247, 0.55);
+    }
+
+    /* İçerik Katmanı (Yazı ve İkonların Z-Index Üstünlüğü) */
+    .metal-btn-content {
+      position: relative;
+      z-index: 4;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* 3. Dönen Kromatik Metal Halka Katmanı (Canvas) */
+    .metal-ring-canvas {
+      position: absolute;
+      inset: -2px;
+      width: calc(100% + 4px);
+      height: calc(100% + 4px);
+      border-radius: 9999px;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Standart Platin Gümüş Metin ("Plan") */
+    .metal-text {
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      position: relative;
+      display: inline-block;
+      background: linear-gradient(
+        135deg,
+        #f8fafc 0%,
+        #94a3b8 25%,
+        #ffffff 50%,
+        #64748b 75%,
+        #e2e8f0 100%
+      );
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: metal-shimmer 6s linear infinite;
+      filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+    }
+
+    /* Kromatik Prizmatik Metin ("Pro") */
+    .metal-text-chromatic {
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(
+        135deg,
+        #60a5fa 0%,   /* Buzul Mavi */
+        #f472b6 25%,  /* Kromatik Pembe */
+        #e2e8f0 45%,  /* Platin Beyaz */
+        #c084fc 70%,  /* Neon Mor */
+        #38bdf8 100%  /* Gökyüzü Mavi */
+      );
+      background-size: 250% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: metal-shimmer 5s ease-in-out infinite alternate;
+      filter: drop-shadow(0 2px 8px rgba(192, 132, 252, 0.4));
+    }
+
+    /* Işığın Metal Yüzeyde Akma Animasyonu */
+    @keyframes metal-shimmer {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    /* "NEW", "PRO" ve "Live mode" Parlayan Metal Rozeti */
+    .metal-badge-pill {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.2rem 0.65rem;
+      border-radius: 9999px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      background: #090d16;
+      color: #f8fafc;
+      isolation: isolate;
+      box-shadow: 
+        inset 0 0 0 1px rgba(255, 255, 255, 0.25),
+        0 4px 14px rgba(0, 0, 0, 0.35);
+    }
+
+    /* Çeperdeki Parlayan Titanyum/Gümüş Çerçeve */
+    .metal-badge-pill::before {
+      content: '';
+      position: absolute;
+      inset: -1.5px;
+      border-radius: inherit;
+      background: linear-gradient(135deg, #c0c0c0, #ffffff, #888888, #e0e0e0, #666666);
+      background-size: 300% 300%;
+      z-index: -1;
+      animation: metal-shimmer 4s ease infinite;
     }
   </style>
 </head>
@@ -190,10 +345,10 @@
           ⚡
         </div>
         <div class="flex flex-col min-w-0 flex-1">
-          <div class="truncate text-sm font-semibold tracking-tight text-sidebar-foreground">Gemini Gateway</div>
+          <div class="truncate text-sm font-semibold tracking-tight text-sidebar-foreground">Gemini <span class="metal-text-chromatic">Gateway</span></div>
           <div class="truncate text-xs text-muted-foreground font-mono">AIP-136 Protocol</div>
         </div>
-        <span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-500/20">v2.0</span>
+        <span class="metal-badge-pill">v2.0 PRO</span>
       </div>
 
       <!-- Navigation Links -->
@@ -310,6 +465,12 @@
             <span id="wsText" class="font-mono text-muted-foreground">ws://127.0.0.1:8000/ws</span>
           </div>
 
+          <!-- Live Engine Platinum Pill -->
+          <span class="metal-badge-pill hidden md:inline-flex gap-1.5">
+            <span class="size-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            LIVE 60FPS
+          </span>
+
           <!-- Quick Test Playground Toggle -->
           <button onclick="switchNav('playground')" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-secondary text-secondary-foreground hover:bg-accent border border-border transition-colors">
             <span>🧪 Test Et</span>
@@ -342,7 +503,7 @@
             <div class="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-xs">
               <div class="flex items-center justify-between text-xs text-muted-foreground font-medium">
                 <span>Aktif Google Hesabı</span>
-                <span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-500/20">Aktif</span>
+                <span class="metal-badge-pill">AKTİF PRO</span>
               </div>
               <div class="flex items-center gap-3">
                 <div id="metricUserAvatar" class="size-10 rounded-full bg-muted flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden text-foreground">
@@ -355,7 +516,7 @@
               </div>
               <div class="text-[11px] text-muted-foreground border-t border-border pt-2 flex items-center justify-between">
                 <span>Plan:</span>
-                <span class="font-medium text-foreground" id="metricUserPlan">Google One AI Pro</span>
+                <span class="metal-text-chromatic font-bold text-xs" id="metricUserPlan">Google One AI Pro</span>
               </div>
             </div>
 
@@ -420,11 +581,14 @@
                   <h2 class="text-base font-semibold text-foreground">Google Pro Hesap Kasası</h2>
                   <p class="text-xs text-muted-foreground">Elinizdeki Pro hesaplar arasında anında geçiş yapın. Kota tükenince sıradakine geçin.</p>
                 </div>
-                <button onclick="openAddAccountModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 shadow-xs transition-opacity">
-                  <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-                  </svg>
-                  <span>Hesap Ekle</span>
+                <button onclick="openAddAccountModal()" class="metal-btn">
+                  <canvas class="metal-ring-canvas"></canvas>
+                  <span class="metal-btn-content">
+                    <svg class="size-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    <span>+ Hesap Ekle</span>
+                  </span>
                 </button>
               </div>
 
@@ -581,7 +745,7 @@
               <div class="flex flex-col gap-0.5">
                 <div class="flex items-center gap-2">
                   <h2 class="text-base font-semibold text-foreground">Canlı İstek & Yerel Süreç (PID) Monitörü</h2>
-                  <span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-500/20">Canlı TCP Dinleme</span>
+                  <span class="metal-badge-pill">CANLI TCP DİNLEME</span>
                 </div>
                 <p class="text-xs text-muted-foreground">Gateway'e bağlanan Windows uygulamalarının PID bilgileri ve enjekte edilen model telemetrisi.</p>
               </div>
@@ -633,8 +797,12 @@
               <h2 class="text-lg font-semibold text-foreground">Gemini AIP-136 Test Laboratuvarı</h2>
               <p class="text-xs text-muted-foreground">İstekleri doğrudan gateway üzerinden gönderin, reasoning stream akışını ve cache hit davranışını test edin.</p>
             </div>
-            <button id="btnLoadCacheTest" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors">
-              <span>⚡ 25k Cache Test Yükle</span>
+            <button id="btnLoadCacheTest" class="metal-btn">
+              <canvas class="metal-ring-canvas"></canvas>
+              <span class="metal-btn-content">
+                <span class="text-amber-300">⚡</span>
+                <span>25k Cache Test Yükle</span>
+              </span>
             </button>
           </div>
 
@@ -1032,6 +1200,7 @@
         btnPlay.className = "flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-primary-foreground bg-primary transition-colors";
         document.getElementById('headerBreadcrumb').textContent = "Test Playground";
       }
+      setTimeout(resizeMetalCanvases, 40);
     }
 
     function toggleSidebar() {
@@ -1176,8 +1345,8 @@
                 </div>
               </div>
               ${isActive ? `
-                <span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 border border-emerald-500/20 shrink-0">
-                  Aktif
+                <span class="metal-badge-pill shrink-0">
+                  PRO AKTİF
                 </span>
               ` : `
                 <button onclick="setActiveAccount('${acc.id}')" class="px-2 py-0.5 rounded text-[10px] font-medium bg-secondary text-secondary-foreground hover:bg-accent border border-border shrink-0 transition-colors">
@@ -2212,9 +2381,75 @@
       alert("✅ 25.000 Token'lık Cache Test Verisi Yüklendi!\n\n1. Gönder'e basın -> Cache: 0.\n2. Ardından soru metnini değiştirip tekrar Gönder'e basın -> 20.450 token ⚡ HIT göreceksiniz!");
     });
 
-    // 8. Bootstrap
+    // 8. Jakub Antalik 60FPS Metal-FX Conic Ring Engine
+    let resizeMetalCanvases = function() {};
+
+    function initMetalRingAnimations() {
+      const canvases = document.querySelectorAll('.metal-ring-canvas');
+      if (!canvases.length) return;
+
+      resizeMetalCanvases = function() {
+        canvases.forEach(canvas => {
+          const parent = canvas.parentElement;
+          if (!parent) return;
+          const dpr = window.devicePixelRatio || 1;
+          const rect = parent.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            canvas.width = (rect.width + 4) * dpr;
+            canvas.height = (rect.height + 4) * dpr;
+          }
+        });
+      };
+
+      resizeMetalCanvases();
+      window.addEventListener('resize', resizeMetalCanvases);
+
+      let angle = 0;
+      function animate() {
+        angle = (angle + 0.02) % (Math.PI * 2);
+
+        canvases.forEach(canvas => {
+          if (!canvas.isConnected || canvas.width === 0 || canvas.height === 0) return;
+          const ctx = canvas.getContext('2d');
+          const w = canvas.width;
+          const h = canvas.height;
+          const cx = w / 2;
+          const cy = h / 2;
+          const dpr = window.devicePixelRatio || 1;
+
+          ctx.clearRect(0, 0, w, h);
+
+          const grad = ctx.createConicGradient(angle, cx, cy);
+          grad.addColorStop(0.00, 'rgba(255, 255, 255, 0.95)'); // Platin Tepe Noktası
+          grad.addColorStop(0.15, 'rgba(147, 197, 253, 0.85)'); // Kromatik Mavi Kırılma
+          grad.addColorStop(0.28, 'rgba(244, 114, 182, 0.80)'); // Kromatik Pembe/Kırmızı
+          grad.addColorStop(0.42, 'rgba(255, 255, 255, 0.15)'); // Gölge Düşüşü
+          grad.addColorStop(0.55, 'rgba(96, 165, 250, 0.90)'); // İkincil Mavi Işık
+          grad.addColorStop(0.70, 'rgba(192, 132, 252, 0.80)'); // Mor Kırılma
+          grad.addColorStop(0.85, 'rgba(255, 255, 255, 0.20)');
+          grad.addColorStop(1.00, 'rgba(255, 255, 255, 0.95)');
+
+          ctx.beginPath();
+          const pad = 2 * dpr;
+          if (ctx.roundRect) {
+            ctx.roundRect(pad, pad, w - pad * 2, h - pad * 2, 9999 * dpr);
+          } else {
+            ctx.arc(cx, cy, Math.min(cx, cy) - pad, 0, Math.PI * 2);
+          }
+          ctx.lineWidth = 3.2 * dpr;
+          ctx.strokeStyle = grad;
+          ctx.stroke();
+        });
+
+        requestAnimationFrame(animate);
+      }
+      requestAnimationFrame(animate);
+    }
+
+    // 9. Bootstrap
     window.addEventListener('DOMContentLoaded', () => {
       connectWebSocket();
+      initMetalRingAnimations();
       loadAccounts();
       loadProgramRules();
       loadDetectedPrograms();
