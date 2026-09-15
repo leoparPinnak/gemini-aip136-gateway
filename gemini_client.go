@@ -73,7 +73,14 @@ func (c *GeminiClient) StreamGenerateContent(
 	payload *GeminiAipPayload,
 	onChunk func(chunk *GeminiStreamChunk) error,
 ) error {
-	token, err := GlobalAuth.GetValidToken()
+	var token string
+	var err error
+	if GlobalAccountStore != nil {
+		token, err = GlobalAccountStore.GetActiveToken()
+	}
+	if token == "" || err != nil {
+		token, err = GlobalAuth.GetValidToken()
+	}
 	if err != nil {
 		return fmt.Errorf("auth error: %w", err)
 	}

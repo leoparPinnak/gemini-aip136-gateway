@@ -401,6 +401,21 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string) (*Gemi
 		targetModel = reqModel
 	}
 
+	// ⚡ DASHBOARD OVERRIDE KONTROLÜ:
+	// Eğer kullanıcı Dashboard'dan "Zorunlu Override" seçtiyse, gelen OpenAI isteğindeki model ve effort çöpe atılır
+	if GlobalSettingsManager != nil {
+		ov := GlobalSettingsManager.Get()
+		if ov.OverrideEnabled {
+			if ov.TargetModel != "" {
+				targetModel = ov.TargetModel
+			}
+			if ov.ThinkingEffort != "" {
+				effort = ov.ThinkingEffort
+				hasReasoningConfig = true
+			}
+		}
+	}
+
 	// 4 Düşünme Modunun Yapılandırılması:
 	var thinkingConfig *GeminiThinkingConfig
 	if hasReasoningConfig && effort != "" && effort != "auto" && effort != "dynamic" {

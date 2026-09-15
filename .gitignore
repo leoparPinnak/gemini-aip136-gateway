@@ -3,6 +3,12 @@
 *.tmp
 *.log
 *.bak
+test_*.json
+go_gateway.exe
+
+# Local Personal Credentials & Storage (NEVER COMMIT)
+accounts.json
+override_settings.json
 
 # OS generated files
 Thumbs.db

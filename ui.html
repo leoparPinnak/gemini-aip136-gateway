@@ -3,29 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gemini Gateway Playground</title>
+  <title>Gemini AIP-136 Control Center & Protocol Gateway</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     :root {
-      --bg-base: #0b0f19;
-      --bg-surface: #111827;
-      --bg-elevated: #1e293b;
-      --bg-card: #0f172a;
-      --border-color: #334155;
-      --border-focus: #38bdf8;
+      --bg-base: #060911;
+      --bg-glass: rgba(13, 19, 34, 0.72);
+      --bg-glass-elevated: rgba(20, 29, 51, 0.85);
+      --bg-card: rgba(15, 23, 42, 0.65);
+      --bg-card-hover: rgba(22, 33, 58, 0.85);
+      --border-glass: rgba(255, 255, 255, 0.08);
+      --border-glass-bright: rgba(56, 189, 248, 0.35);
+      --specular: rgba(255, 255, 255, 0.18);
+      --primary: #38bdf8;
+      --primary-glow: rgba(56, 189, 248, 0.25);
+      --accent: #818cf8;
+      --accent-glow: rgba(129, 140, 248, 0.25);
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.25);
+      --warning: #f59e0b;
+      --warning-glow: rgba(245, 158, 11, 0.25);
+      --danger: #ef4444;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
       --text-dim: #64748b;
-      --primary: #38bdf8;
-      --primary-hover: #0ea5e9;
-      --primary-glow: rgba(56, 189, 248, 0.25);
-      --accent: #818cf8;
-      --success: #10b981;
-      --warning: #f59e0b;
-      --danger: #ef4444;
       --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
     }
@@ -41,21 +45,28 @@
       color: var(--text-main);
       font-family: var(--font-sans);
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.06) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(129, 140, 248, 0.06) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.03) 0%, transparent 60%);
+      background-attachment: fixed;
     }
 
+    /* LIQUID GLASS TOP NAV */
     header {
-      background: rgba(17, 24, 39, 0.85);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border-color);
-      padding: 12px 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
       position: sticky;
       top: 0;
       z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 28px;
+      background: var(--bg-glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-glass);
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
     }
 
     .brand {
@@ -65,220 +76,196 @@
     }
 
     .brand-logo {
-      width: 34px;
-      height: 34px;
-      border-radius: 8px;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
       background: linear-gradient(135deg, #0ea5e9, #6366f1);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 18px;
-      font-weight: bold;
-      color: white;
-      box-shadow: 0 0 15px var(--primary-glow);
+      font-size: 20px;
+      box-shadow: 0 0 20px var(--primary-glow), inset 0 1px 1px rgba(255, 255, 255, 0.5);
     }
 
     .brand-title {
-      font-size: 16px;
+      font-size: 17px;
       font-weight: 700;
       letter-spacing: -0.3px;
+      background: linear-gradient(90deg, #f8fafc, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
 
     .brand-sub {
       font-size: 12px;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
+      color: var(--text-dim);
+      font-weight: 500;
     }
 
-    .server-status {
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .view-toggle {
+      display: flex;
+      background: rgba(15, 23, 42, 0.7);
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid var(--border-glass);
+    }
+
+    .view-btn {
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .view-btn.active {
+      background: var(--bg-glass-elevated);
+      color: var(--primary);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    .ws-indicator {
       display: flex;
       align-items: center;
       gap: 8px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      padding: 6px 14px;
-      border-radius: 9999px;
-      font-size: 13px;
+      font-size: 12px;
+      padding: 6px 12px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 20px;
+      color: #6ee7b7;
+      font-weight: 600;
     }
 
-    .status-dot {
+    .ws-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: var(--warning);
-      transition: all 0.3s ease;
-    }
-
-    .status-dot.online {
       background: var(--success);
-      box-shadow: 0 0 8px var(--success);
+      box-shadow: 0 0 10px var(--success);
+      animation: pulse 2s infinite;
     }
 
-    .status-dot.offline {
+    .ws-dot.offline {
       background: var(--danger);
-      box-shadow: 0 0 8px var(--danger);
+      box-shadow: 0 0 10px var(--danger);
+      animation: none;
     }
 
-    .main-container {
-      flex: 1;
-      max-width: 1400px;
-      width: 100%;
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
+    }
+
+    /* MAIN WRAPPER */
+    main {
+      max-width: 1560px;
       margin: 0 auto;
-      padding: 20px 24px;
+      padding: 24px;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* LIQUID GLASS PANELS */
+    .glass-panel {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glass);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 24px;
+      position: relative;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-main);
+    }
+
+    .panel-title .icon {
+      font-size: 18px;
+    }
+
+    /* OVERRIDE SECTION */
+    .override-grid {
       display: grid;
-      grid-template-columns: 480px 1fr;
-      gap: 24px;
+      grid-template-columns: 1fr 1.2fr 1fr;
+      gap: 18px;
+      align-items: center;
     }
 
     @media (max-width: 1024px) {
-      .main-container {
+      .override-grid {
         grid-template-columns: 1fr;
       }
     }
 
-    .panel {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-color);
-      border-radius: 14px;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .panel-header {
-      padding: 14px 18px;
-      border-bottom: 1px solid var(--border-color);
-      background: rgba(30, 41, 59, 0.4);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .panel-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text-main);
+    .switch-card {
       display: flex;
       align-items: center;
-      gap: 8px;
-    }
-
-    .panel-body {
-      padding: 18px;
-      display: flex;
-      flex-direction: column;
       gap: 16px;
-      overflow-y: auto;
+      padding: 14px 18px;
+      border-radius: 12px;
+      background: var(--bg-glass-elevated);
+      border: 1px solid var(--border-glass);
+      transition: all 0.2s ease;
     }
 
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
+    .switch-card.active-override {
+      border-color: rgba(245, 158, 11, 0.5);
+      box-shadow: 0 0 25px rgba(245, 158, 11, 0.15);
+      background: rgba(245, 158, 11, 0.08);
     }
 
-    .form-label-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .form-label {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text-main);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .badge {
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 6px;
-      font-weight: 600;
-      font-family: var(--font-mono);
-    }
-
-    .badge-empty {
-      background: rgba(100, 116, 139, 0.2);
-      color: var(--text-muted);
-      border: 1px solid rgba(100, 116, 139, 0.4);
-    }
-
-    .badge-active {
-      background: rgba(16, 185, 129, 0.2);
-      color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.4);
-    }
-
-    .badge-optional {
-      color: var(--text-dim);
-      font-size: 11px;
-    }
-
-    input[type="text"], select, textarea {
-      width: 100%;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      color: var(--text-main);
-      font-family: inherit;
-      font-size: 13px;
-      padding: 10px 12px;
-      outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    input[type="text"]:focus, select:focus, textarea:focus {
-      border-color: var(--border-focus);
-      box-shadow: 0 0 0 2px var(--primary-glow);
-    }
-
-    textarea {
-      resize: vertical;
-      line-height: 1.5;
-    }
-
-    #systemPrompt {
-      min-height: 80px;
-      border-left: 3px solid var(--accent);
-    }
-
-    #userPrompt {
-      min-height: 120px;
-      border-left: 3px solid var(--primary);
-    }
-
-    .settings-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-
-    .switch-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 12px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-    }
-
-    .switch-label {
-      font-size: 13px;
-      color: var(--text-main);
-    }
-
-    .switch {
+    /* TOGGLE SWITCH */
+    .toggle-switch {
       position: relative;
       display: inline-block;
-      width: 42px;
-      height: 22px;
+      width: 52px;
+      height: 28px;
+      flex-shrink: 0;
     }
 
-    .switch input {
+    .toggle-switch input {
       opacity: 0;
       width: 0;
       height: 0;
@@ -287,182 +274,550 @@
     .slider {
       position: absolute;
       cursor: pointer;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-color: var(--border-color);
-      transition: .3s;
-      border-radius: 22px;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #334155;
+      transition: 0.3s;
+      border-radius: 34px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
     }
 
     .slider:before {
       position: absolute;
       content: "";
-      height: 16px;
-      width: 16px;
+      height: 20px;
+      width: 20px;
       left: 3px;
       bottom: 3px;
       background-color: white;
-      transition: .3s;
+      transition: 0.3s;
       border-radius: 50%;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
     }
 
     input:checked + .slider {
-      background-color: var(--primary);
+      background-color: var(--warning);
+      box-shadow: 0 0 15px var(--warning-glow);
     }
 
     input:checked + .slider:before {
-      transform: translateX(20px);
+      transform: translateX(24px);
     }
 
-    .button-group {
+    .pill-group {
       display: flex;
+      gap: 6px;
+      background: rgba(10, 15, 26, 0.6);
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid var(--border-glass);
+    }
+
+    .pill-btn {
+      flex: 1;
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 7px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .pill-btn:hover {
+      color: var(--text-main);
+    }
+
+    .pill-btn.active {
+      background: var(--bg-glass-elevated);
+      color: var(--primary);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .status-banner {
+      margin-top: 14px;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
       gap: 10px;
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      color: #bae6fd;
+    }
+
+    .status-banner.override-on {
+      background: rgba(245, 158, 11, 0.1);
+      border-color: rgba(245, 158, 11, 0.35);
+      color: #fde68a;
+    }
+
+    /* ACCOUNTS GRID (OBJECT CARDS) */
+    .accounts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 20px;
+    }
+
+    .account-card {
+      background: var(--bg-glass-elevated);
+      border: 1px solid var(--border-glass);
+      border-radius: 16px;
+      padding: 20px;
+      position: relative;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .account-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(255, 255, 255, 0.18);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    .account-card.active {
+      border-color: rgba(16, 185, 129, 0.5);
+      box-shadow: 0 0 30px rgba(16, 185, 129, 0.2);
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.85) 100%);
+    }
+
+    .account-card-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .account-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      background: #1e293b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+      color: #94a3b8;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .account-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .account-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .account-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .account-email {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-family: var(--font-mono);
+    }
+
+    .tier-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
       margin-top: 4px;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    .active-badge {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #6ee7b7;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* QUOTA METRICS */
+    .quota-section {
+      background: rgba(10, 15, 26, 0.6);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .quota-item {
+      margin-bottom: 10px;
+    }
+
+    .quota-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .quota-label-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .quota-name {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .quota-val {
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--primary);
+    }
+
+    .progress-bar-bg {
+      height: 7px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 10px;
+      background: linear-gradient(90deg, #10b981, #38bdf8);
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+      transition: width 0.4s ease;
+    }
+
+    .progress-bar-fill.warning {
+      background: linear-gradient(90deg, #f59e0b, #ef4444);
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+    }
+
+    .quota-meta {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
     }
 
     .btn {
+      padding: 8px 14px;
+      border-radius: 9px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--border-glass);
+      cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      padding: 10px 18px;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      border: none;
-      transition: all 0.2s;
-      outline: none;
+      gap: 6px;
+      transition: all 0.2s ease;
+      background: var(--bg-card);
+      color: var(--text-main);
+    }
+
+    .btn:hover {
+      background: var(--bg-glass-elevated);
+      border-color: rgba(255, 255, 255, 0.2);
     }
 
     .btn-primary {
       background: linear-gradient(135deg, #0ea5e9, #2563eb);
+      border: none;
       color: white;
-      flex: 1;
-      box-shadow: 0 4px 14px var(--primary-glow);
+      box-shadow: 0 2px 10px rgba(14, 165, 233, 0.3);
     }
 
-    .btn-primary:hover:not(:disabled) {
-      background: linear-gradient(135deg, #0284c7, #1d4ed8);
-      transform: translateY(-1px);
+    .btn-primary:hover {
+      box-shadow: 0 4px 16px rgba(14, 165, 233, 0.5);
     }
 
-    .btn-primary:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
+    .btn-success {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #6ee7b7;
+    }
+
+    .btn-success:hover {
+      background: rgba(16, 185, 129, 0.25);
     }
 
     .btn-danger {
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid rgba(239, 68, 68, 0.4);
-      color: #f87171;
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
     }
 
-    .btn-danger:hover:not(:disabled) {
-      background: rgba(239, 68, 68, 0.25);
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.2);
     }
 
-    .btn-secondary {
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-color);
-      color: var(--text-muted);
-    }
-
-    .btn-secondary:hover {
-      color: var(--text-main);
-      background: var(--border-color);
-    }
-
-    /* Payload Inspector */
-    .payload-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      overflow: hidden;
-      margin-top: 4px;
-    }
-
-    .payload-header {
-      padding: 8px 12px;
-      background: rgba(30, 41, 59, 0.5);
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-muted);
-      cursor: pointer;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      user-select: none;
-    }
-
-    .payload-content {
-      padding: 10px 12px;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: #cbd5e1;
-      max-height: 180px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      display: none;
-      background: #090d16;
-    }
-
-    .payload-content.open {
-      display: block;
-    }
-
-    /* Response Output Section */
-    .output-panel {
-      flex: 1;
+    /* ADD ACCOUNT SPECIAL CARD */
+    .add-account-card {
+      background: rgba(15, 23, 42, 0.4);
+      border: 2px dashed rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      padding: 30px;
       display: flex;
       flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-height: 260px;
     }
 
-    .metrics-bar {
+    .add-account-card:hover {
+      background: rgba(20, 29, 51, 0.6);
+      border-color: var(--primary);
+      box-shadow: 0 0 25px var(--primary-glow);
+    }
+
+    .add-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
       display: flex;
-      gap: 16px;
-      padding: 10px 18px;
-      background: rgba(15, 23, 42, 0.8);
-      border-bottom: 1px solid var(--border-color);
-      font-size: 12px;
-      font-family: var(--font-mono);
-      color: var(--text-muted);
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: var(--primary);
+      margin-bottom: 14px;
+    }
+
+    /* LIVE REQUESTS TABLE */
+    .table-container {
       overflow-x: auto;
+      border-radius: 12px;
+      border: 1px solid var(--border-glass);
+      background: rgba(10, 15, 26, 0.5);
     }
 
-    .metric-item {
-      display: flex;
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-glass);
+    }
+
+    th {
+      background: rgba(15, 23, 42, 0.8);
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .proc-tag {
+      display: inline-flex;
       align-items: center;
       gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: rgba(129, 140, 248, 0.15);
+      border: 1px solid rgba(129, 140, 248, 0.3);
+      color: #c7d2fe;
     }
 
-    .metric-val {
-      color: var(--primary);
-      font-weight: 600;
+    .override-pill {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(245, 158, 11, 0.2);
+      color: #fde68a;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      margin-left: 6px;
     }
 
-    .metric-val.cached {
+    .cache-hit-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 700;
       color: #34d399;
+      font-size: 12px;
+      font-family: var(--font-mono);
     }
 
-    .output-body {
+    /* MODAL */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      justify-content: center;
       padding: 20px;
-      flex: 1;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
     }
 
-    /* Thought / Reasoning Box */
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-box {
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      max-width: 520px;
+      width: 100%;
+      padding: 26px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      position: relative;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    .step-box {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--border-glass);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .step-box code {
+      font-family: var(--font-mono);
+      background: #090d16;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--primary);
+    }
+
+    /* TEST PLAYGROUND STYLES (PRESERVED) */
+    .playground-grid {
+      display: grid;
+      grid-template-columns: 460px 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 1024px) {
+      .playground-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      background: #090d16;
+      border: 1px solid var(--border-glass);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
     .thought-container {
-      background: rgba(30, 41, 59, 0.35);
+      background: #090e18;
       border: 1px solid rgba(129, 140, 248, 0.3);
       border-radius: 10px;
-      overflow: hidden;
+      margin-bottom: 16px;
       display: none;
+      overflow: hidden;
     }
 
     .thought-container.visible {
@@ -470,806 +825,814 @@
     }
 
     .thought-header {
-      padding: 10px 14px;
-      background: rgba(99, 102, 241, 0.12);
+      background: rgba(129, 140, 248, 0.1);
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #c7d2fe;
       display: flex;
       justify-content: space-between;
-      align-items: center;
       cursor: pointer;
-      user-select: none;
-      font-size: 13px;
-      font-weight: 600;
-      color: #a5b4fc;
     }
 
     .thought-body {
-      padding: 14px;
-      font-size: 13px;
-      color: #cbd5e1;
-      line-height: 1.6;
-      border-top: 1px solid rgba(129, 140, 248, 0.2);
-      font-style: italic;
-      white-space: pre-wrap;
-      max-height: 280px;
+      padding: 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #94a3b8;
+      max-height: 240px;
       overflow-y: auto;
-      background: rgba(15, 23, 42, 0.6);
+      white-space: pre-wrap;
     }
 
-    /* Response Markdown Area */
-    .response-container {
+    .response-view {
+      background: #090d16;
+      border: 1px solid var(--border-glass);
+      border-radius: 12px;
+      padding: 18px;
+      min-height: 380px;
+      max-height: 700px;
+      overflow-y: auto;
       font-size: 14px;
       line-height: 1.7;
-      color: var(--text-main);
-    }
-
-    .response-container pre {
-      background: #090d16;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 14px;
-      margin: 12px 0;
-      overflow-x: auto;
-      position: relative;
-    }
-
-    .response-container code {
-      font-family: var(--font-mono);
-      font-size: 13px;
-      color: #38bdf8;
-    }
-
-    .response-container pre code {
-      color: #e2e8f0;
-    }
-
-    .response-container p {
-      margin-bottom: 12px;
-    }
-
-    .response-container ul, .response-container ol {
-      padding-left: 24px;
-      margin-bottom: 12px;
-    }
-
-    .response-container table {
-      border-collapse: collapse;
-      width: 100%;
-      margin: 14px 0;
-    }
-
-    .response-container th, .response-container td {
-      border: 1px solid var(--border-color);
-      padding: 8px 12px;
-      text-align: left;
-    }
-
-    .response-container th {
-      background: var(--bg-card);
-    }
-
-    .typing-cursor {
-      display: inline-block;
-      width: 8px;
-      height: 16px;
-      background: var(--primary);
-      margin-left: 4px;
-      animation: blink 0.8s infinite;
-      vertical-align: middle;
-    }
-
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0; }
-    }
-
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      color: var(--text-dim);
-      gap: 12px;
-      padding: 60px 20px;
-      text-align: center;
-    }
-
-    .empty-icon {
-      font-size: 40px;
-      opacity: 0.6;
-    }
-
-    .copy-btn {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      padding: 4px 8px;
-      font-size: 11px;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
-      color: var(--text-muted);
-      cursor: pointer;
-    }
-
-    .copy-btn:hover {
-      color: white;
-      border-color: var(--primary);
-    }
-
-    .alert {
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-size: 13px;
-      display: none;
-    }
-
-    .alert-danger {
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid rgba(239, 68, 68, 0.4);
-      color: #fca5a5;
     }
   </style>
 </head>
 <body>
 
+  <!-- TOP NAV -->
   <header>
     <div class="brand">
       <div class="brand-logo">⚡</div>
       <div>
-        <div class="brand-title">Gemini AIP-136 Protocol Gateway</div>
-        <div class="brand-sub">OpenAI Responses & Chat Completions Playground</div>
+        <div class="brand-title">Gemini AIP-136 Control Center</div>
+        <div class="brand-sub">Multi-Account Pro Vault & Protocol Gateway</div>
       </div>
     </div>
 
-    <div class="server-status" id="serverStatusBadge">
-      <div class="status-dot" id="statusDot"></div>
-      <span id="statusText">Sunucu Kontrol Ediliyor...</span>
+    <div class="nav-actions">
+      <!-- Görünüm Seçici -->
+      <div class="view-toggle">
+        <button class="view-btn active" id="btnViewDashboard" onclick="switchView('dashboard')">
+          📊 Ana Dashboard
+        </button>
+        <button class="view-btn" id="btnViewPlayground" onclick="switchView('playground')">
+          🧪 Test Playground
+        </button>
+      </div>
+
+      <!-- WebSocket Durumu -->
+      <div class="ws-indicator" id="wsStatusBadge">
+        <div class="ws-dot" id="wsDot"></div>
+        <span id="wsText">Canlı Bağlantı</span>
+      </div>
     </div>
   </header>
 
-  <main class="main-container">
-    <!-- SOL PANEL: İstek Konfigürasyonu -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">
-          <span>⚙️ İstek Yapılandırması</span>
+  <main>
+    <!-- TAB 1: ANA DASHBOARD -->
+    <div id="tabDashboard" class="tab-content active">
+
+      <!-- PANEL 1: ENJEKSİYON VE OVERRIDE KONTROLÜ -->
+      <div class="glass-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="icon">🎛️</span>
+            <span>Gateway Model & Düşünme Seviyesi Enjeksiyonu (Override Controller)</span>
+          </div>
+          <span style="font-size: 12px; color: var(--text-dim);">DSH ve 3. parti istemciler için global kural</span>
         </div>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" id="btnLoadCacheTest">⚡ Cache Test Yükle (25k)</button>
-          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;" id="btnResetDefaults">Sıfırla</button>
+
+        <div class="override-grid">
+          <!-- 1. MOD SEÇİCİ ANAHTAR -->
+          <div class="switch-card" id="switchCard">
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggleOverride" onchange="updateOverrideSettings()">
+              <span class="slider"></span>
+            </label>
+            <div>
+              <div style="font-weight: 700; font-size: 14px;" id="overrideModeLabel">Şeffaf Yönlendirme</div>
+              <div style="font-size: 11px; color: var(--text-muted);" id="overrideModeDesc">Gelen OpenAI Router isteğindeki modeli baz alır.</div>
+            </div>
+          </div>
+
+          <!-- 2. HEDEF MODEL -->
+          <div>
+            <div class="form-label">ZORLANACAK MODEL (OVERRIDE)</div>
+            <div class="pill-group" id="groupModel">
+              <button class="pill-btn" onclick="selectModel('gemini-3.8-flash-low')">Flash Low</button>
+              <button class="pill-btn active" onclick="selectModel('gemini-3.8-flash-medium')">Flash Medium</button>
+              <button class="pill-btn" onclick="selectModel('gemini-3.8-flash-high')">Flash High</button>
+            </div>
+          </div>
+
+          <!-- 3. DÜŞÜNME SEVİYESİ -->
+          <div>
+            <div class="form-label">DÜŞÜNME SEVİYESİ (THINKING EFFORT)</div>
+            <div class="pill-group" id="groupEffort">
+              <button class="pill-btn active" onclick="selectEffort('dynamic')">Dinamik</button>
+              <button class="pill-btn" onclick="selectEffort('high')">High (-1)</button>
+              <button class="pill-btn" onclick="selectEffort('low')">Low (1k)</button>
+              <button class="pill-btn" onclick="selectEffort('off')">Off (0)</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- DURUM ROZETİ -->
+        <div class="status-banner" id="statusBanner">
+          <span id="bannerIcon">ℹ️</span>
+          <span id="bannerText">Şu an <strong>Şeffaf Mod</strong> aktif: Gelen OpenAI isteklerindeki model ve efor parametreleri olduğu gibi korunur.</span>
         </div>
       </div>
 
-      <div class="panel-body">
-        <!-- Gateway URL & Protokol -->
-        <div class="settings-grid">
-          <div class="form-group">
-            <label class="form-label">Gateway Adresi</label>
-            <input type="text" id="gatewayUrl" value="http://127.0.0.1:8000" placeholder="http://127.0.0.1:8000">
+      <!-- PANEL 2: ÇOKLU PRO HESAP KASASI (MULTI-ACCOUNT CARDS) -->
+      <div class="glass-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="icon">👥</span>
+            <span>Gemini Pro Hesap Kasası (Multi-Account Vault)</span>
+          </div>
+          <button class="btn btn-primary" onclick="openAddAccountModal()">
+            ➕ Yeni Pro Hesap Ekle
+          </button>
+        </div>
+
+        <div class="accounts-grid" id="accountsGrid">
+          <!-- Hesap kartları JS ile dinamik doldurulur -->
+        </div>
+      </div>
+
+      <!-- PANEL 3: CANLI İSTEK VE PROGRAM (PID) İZLEYİCİ -->
+      <div class="glass-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="icon">📡</span>
+            <span>Canlı İstek ve Program (PID) İzleyicisi</span>
+          </div>
+          <button class="btn" onclick="clearLiveRequests()">Geçmişi Temizle</button>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Program / PID</th>
+                <th>Zaman</th>
+                <th>Protokol</th>
+                <th>İstek Modeli</th>
+                <th>Uygulanan Model</th>
+                <th>Düşünme</th>
+                <th>Gecikme</th>
+                <th>Token Kullanımı & Cache</th>
+                <th>Durum</th>
+              </tr>
+            </thead>
+            <tbody id="requestsTableBody">
+              <tr>
+                <td colspan="9" style="text-align: center; color: var(--text-dim); padding: 24px;">
+                  Henüz bir istek gelmedi. Gateway (Port 8000) dinlemede...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TAB 2: TEST PLAYGROUND (MEVCUT TEST KONSOLU) -->
+    <div id="tabPlayground" class="tab-content">
+      <div class="playground-grid">
+        <!-- SOL PANEL: İstek Konfigürasyonu -->
+        <div class="glass-panel" style="margin-bottom: 0;">
+          <div class="panel-header">
+            <div class="panel-title">⚙️ Playground Ayarları</div>
+            <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;" id="btnLoadCacheTest">⚡ Cache Test Yükle (25k)</button>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Uç Nokta (Format)</label>
-            <select id="apiEndpoint">
+            <label class="form-label">Uç Nokta</label>
+            <select id="playEndpoint">
               <option value="/v1/chat/completions">/v1/chat/completions (Chat)</option>
               <option value="/v1/responses">/v1/responses (Responses API)</option>
             </select>
           </div>
-        </div>
 
-        <!-- Model & Muhakeme Düzeyi -->
-        <div class="settings-grid">
           <div class="form-group">
             <label class="form-label">Model</label>
-            <select id="modelSelect">
-              <option value="gemini-3.8-flash-medium" selected>gemini-3.8-flash-medium (Dengeli)</option>
-              <option value="gemini-3.8-flash-high">gemini-3.8-flash-high (Yüksek Muhakeme)</option>
-              <option value="gemini-3.8-flash-low">gemini-3.8-flash-low (Hızlı / Hafif)</option>
+            <select id="playModel">
+              <option value="gemini-3.8-flash-medium">gemini-3.8-flash-medium</option>
+              <option value="gemini-3.8-flash-high">gemini-3.8-flash-high</option>
+              <option value="gemini-3.8-flash-low">gemini-3.8-flash-low</option>
             </select>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Reasoning Effort (Düşünme)</label>
-            <select id="effortSelect">
-              <option value="default" selected>Varsayılan (Model Kararı)</option>
-              <option value="off">off (Düşünme Kapalı - 0 Bütçe)</option>
-              <option value="low">low (Düşük Muhakeme)</option>
-              <option value="high">high (Yüksek Muhakeme)</option>
+            <label class="form-label">Reasoning Effort</label>
+            <select id="playEffort">
+              <option value="default">Varsayılan (Dinamik)</option>
+              <option value="high">high (-1)</option>
+              <option value="low">low (1000)</option>
+              <option value="off">off (0)</option>
             </select>
           </div>
-        </div>
 
-        <!-- Akış & Parametreler -->
-        <div class="settings-grid">
-          <div class="switch-row">
-            <span class="switch-label">Canlı Akış (SSE)</span>
-            <label class="switch">
-              <input type="checkbox" id="streamToggle" checked>
-              <span class="slider"></span>
-            </label>
+          <div class="form-group">
+            <label class="form-label">Sistem İstemi</label>
+            <textarea id="playSystemPrompt" placeholder="Sistem istemi (boş bırakılırsa enjeksiyon yapılmaz)..."></textarea>
           </div>
 
-          <div class="switch-row">
-            <span class="switch-label">Sohbet Geçmişi (Multi-Turn)</span>
-            <label class="switch">
-              <input type="checkbox" id="multiTurnToggle">
-              <span class="slider"></span>
-            </label>
+          <div class="form-group">
+            <label class="form-label">Kullanıcı Mesajı</label>
+            <textarea id="playUserPrompt" placeholder="Mesajınızı buraya yazın..." style="min-height: 70px;">Merhaba, kimsin ve hangi modeli kullanıyorsun?</textarea>
+          </div>
+
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-primary" id="btnPlaySend" style="flex: 1; padding: 10px;" onclick="sendPlaygroundRequest()">
+              ▶ Gönder (Streaming)
+            </button>
+            <button class="btn btn-danger" id="btnPlayStop" style="display: none;" onclick="stopPlaygroundRequest()">
+              ⏹ Durdur
+            </button>
           </div>
         </div>
 
-        <!-- Sistem İstemcisi (System Prompt) -->
-        <div class="form-group">
-          <div class="form-label-row">
-            <label class="form-label" for="systemPrompt">
-              <span>Sistem İstemcisi (System Prompt)</span>
-            </label>
-            <span class="badge badge-empty" id="systemPromptBadge">Boş (Gönderilmeyecek)</span>
+        <!-- SAĞ PANEL: Yanıt ve Çıktı -->
+        <div class="glass-panel" style="margin-bottom: 0;">
+          <div class="panel-header">
+            <div class="panel-title">💬 Model Çıktısı</div>
+            <div style="display: flex; gap: 14px; font-size: 12px; font-family: var(--font-mono); color: var(--text-muted);">
+              <span>Süre: <strong id="mDuration" style="color: var(--text-main);">-</strong></span>
+              <span>Prompt: <strong id="mPrompt" style="color: var(--text-main);">0</strong></span>
+              <span>Cache: <strong id="mCache" style="color: var(--success);">0 ⚡</strong></span>
+              <span>Output: <strong id="mOutput" style="color: var(--text-main);">0</strong></span>
+            </div>
           </div>
-          <textarea id="systemPrompt" placeholder="İsteğe bağlı. Boş bırakırsanız istekte HİÇBİR sistem istemi gönderilmez, model saf kullanıcı istemiyle çalışır."></textarea>
-        </div>
 
-        <!-- Kullanıcı İstemcisi (User Prompt) -->
-        <div class="form-group">
-          <div class="form-label-row">
-            <label class="form-label" for="userPrompt">
-              <span>Kullanıcı İstemcisi (User Prompt)</span>
-              <span style="color: var(--danger);">*</span>
-            </label>
-            <span class="badge-optional" id="userCharCount">0 karakter</span>
+          <!-- Düşünme Kutusu -->
+          <div class="thought-container" id="playThoughtContainer">
+            <div class="thought-header" onclick="toggleThoughtBox()">
+              <span>🧠 Modelin Düşünce Süreci (Chain-of-Thought)</span>
+              <span id="thoughtToggleArrow">▼ Daralt</span>
+            </div>
+            <div class="thought-body" id="playThoughtBody"></div>
           </div>
-          <textarea id="userPrompt" placeholder="Sorunuzu veya talimatınızı buraya yazın... (Göndermek için Ctrl+Enter'a basabilirsiniz)"></textarea>
-        </div>
 
-        <!-- Eylem Butonları -->
-        <div class="button-group">
-          <button class="btn btn-primary" id="btnSend">
-            <span>🚀 Gönder</span>
-            <kbd style="font-size: 10px; opacity: 0.8; background: rgba(0,0,0,0.2); padding: 2px 4px; border-radius: 4px;">Ctrl+Enter</kbd>
-          </button>
-          <button class="btn btn-danger" id="btnStop" disabled>⏹️ Durdur</button>
-          <button class="btn btn-secondary" id="btnClear">🧹 Temizle</button>
-        </div>
-
-        <!-- Payload Önizleme / Doğrulama -->
-        <div class="payload-card">
-          <div class="payload-header" id="payloadHeader">
-            <span>🔍 Gönderilecek İstek JSON Payload'u (Canlı Önizleme)</span>
-            <span id="payloadArrow">▼</span>
-          </div>
-          <pre class="payload-content" id="payloadPreview"></pre>
-        </div>
-      </div>
-    </div>
-
-    <!-- SAĞ PANEL: Çıktı & Yanıt -->
-    <div class="panel output-panel">
-      <div class="panel-header">
-        <div class="panel-title">
-          <span>💬 Model Yanıtı</span>
-        </div>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;" id="btnCopyResponse">📋 Kopyala</button>
-        </div>
-      </div>
-
-      <!-- Metrik Çubuğu -->
-      <div class="metrics-bar" id="metricsBar">
-        <div class="metric-item">Durum: <span class="metric-val" id="mStatus">Hazır</span></div>
-        <div class="metric-item">Süre: <span class="metric-val" id="mDuration">-</span></div>
-        <div class="metric-item">Prompt: <span class="metric-val" id="mPromptTokens">0</span></div>
-        <div class="metric-item">Cache: <span class="metric-val cached" id="mCachedTokens">0</span></div>
-        <div class="metric-item">Output: <span class="metric-val" id="mOutputTokens">0</span></div>
-        <div class="metric-item">Toplam: <span class="metric-val" id="mTotalTokens">0</span></div>
-      </div>
-
-      <div class="output-body" id="outputBody">
-        <div class="alert alert-danger" id="errorAlert"></div>
-
-        <!-- Düşünme / Muhakeme Kutusu -->
-        <div class="thought-container" id="thoughtContainer">
-          <div class="thought-header" id="thoughtHeader">
-            <span>🧠 Model Düşünme Süreci (Reasoning)</span>
-            <span id="thoughtDurationBadge" style="font-size: 11px; opacity: 0.8;"></span>
-          </div>
-          <div class="thought-body" id="thoughtBody"></div>
-        </div>
-
-        <!-- Asistan Yanıtı -->
-        <div class="response-container" id="responseContainer">
-          <div class="empty-state" id="emptyState">
-            <div class="empty-icon">✨</div>
-            <p>Bir sistem istemi (isteğe bağlı) ve kullanıcı istemi girip <strong>Gönder</strong> butonuna tıklayın.</p>
-            <p style="font-size: 12px; color: var(--text-dim);">Sistem istemi boş bırakıldığında gövdede hiçbir system mesajı yer almaz.</p>
+          <!-- Yanıt Alanı -->
+          <div class="response-view" id="playResponseView">
+            <div style="display: flex; height: 100%; align-items: center; justify-content: center; color: var(--text-dim);">
+              İstek gönderildiğinde modelin cevabı ve düşünceleri burada canlı akacak...
+            </div>
           </div>
         </div>
       </div>
     </div>
   </main>
 
+  <!-- YENİ HESAP EKLEME MODALI -->
+  <div class="modal-backdrop" id="addAccountModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">➕ Yeni Pro Hesap Ekle</div>
+        <button class="modal-close" onclick="closeAddAccountModal()">&times;</button>
+      </div>
+
+      <div class="step-box">
+        <strong style="color: var(--primary);">Adım 1:</strong> Terminalinizde (PowerShell/CMD) çıkış yapıp yeni Google hesabınızla giriş yapın:
+        <pre style="margin-top: 6px; padding: 6px; background: #060911; border-radius: 6px; color: #38bdf8;">agy auth login</pre>
+      </div>
+
+      <div class="step-box">
+        <strong style="color: var(--primary);">Adım 2:</strong> Tarayıcıda açılan ekranda yeni Pro Google hesabınızı onaylayın.
+      </div>
+
+      <div class="step-box">
+        <strong style="color: var(--primary);">Adım 3:</strong> Oturum açma tamamlandıktan sonra aşağıdaki butona tıklayın. Gateway yeni oturumu mevcut hesapların yanına <strong>yeni bir kart olarak</strong> ekleyecektir:
+      </div>
+
+      <button class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 14px;" onclick="importWindowsAccount()">
+        📥 Windows'taki Yeni Girişi İçe Aktar
+      </button>
+    </div>
+  </div>
+
   <script>
-    // DOM Elementleri
-    const gatewayUrlEl = document.getElementById('gatewayUrl');
-    const apiEndpointEl = document.getElementById('apiEndpoint');
-    const modelSelectEl = document.getElementById('modelSelect');
-    const effortSelectEl = document.getElementById('effortSelect');
-    const streamToggleEl = document.getElementById('streamToggle');
-    const systemPromptEl = document.getElementById('systemPrompt');
-    const systemPromptBadge = document.getElementById('systemPromptBadge');
-    const userPromptEl = document.getElementById('userPrompt');
-    const userCharCountEl = document.getElementById('userCharCount');
-    const btnSend = document.getElementById('btnSend');
-    const btnStop = document.getElementById('btnStop');
-    const btnClear = document.getElementById('btnClear');
-    const btnResetDefaults = document.getElementById('btnResetDefaults');
-    const btnLoadCacheTest = document.getElementById('btnLoadCacheTest');
-    const multiTurnToggle = document.getElementById('multiTurnToggle');
-    const btnCopyResponse = document.getElementById('btnCopyResponse');
-    const payloadHeader = document.getElementById('payloadHeader');
-    const payloadPreview = document.getElementById('payloadPreview');
-    const payloadArrow = document.getElementById('payloadArrow');
-    const serverStatusBadge = document.getElementById('serverStatusBadge');
-    const statusDot = document.getElementById('statusDot');
-    const statusText = document.getElementById('statusText');
-    const thoughtContainer = document.getElementById('thoughtContainer');
-    const thoughtHeader = document.getElementById('thoughtHeader');
-    const thoughtBody = document.getElementById('thoughtBody');
-    const thoughtDurationBadge = document.getElementById('thoughtDurationBadge');
-    const responseContainer = document.getElementById('responseContainer');
-    const emptyState = document.getElementById('emptyState');
-    const errorAlert = document.getElementById('errorAlert');
+    // GLOBAL STATE
+    let currentAccounts = [];
+    let activeAccountId = null;
+    let overrideSettings = {
+      override_enabled: false,
+      target_model: "gemini-3.8-flash-medium",
+      thinking_effort: "dynamic"
+    };
 
-    // Metrikler
-    const mStatus = document.getElementById('mStatus');
-    const mDuration = document.getElementById('mDuration');
-    const mPromptTokens = document.getElementById('mPromptTokens');
-    const mCachedTokens = document.getElementById('mCachedTokens');
-    const mOutputTokens = document.getElementById('mOutputTokens');
-    const mTotalTokens = document.getElementById('mTotalTokens');
+    let ws = null;
+    let playAbortController = null;
 
-    let abortController = null;
-    let fullOutputText = '';
-    let fullThoughtText = '';
-    let reqStartTime = 0;
-    let isGenerating = false;
-
-    let conversationHistory = [];
-
-    // Canlı Sistem İstemi Rozeti ve Payload Güncellemesi
-    function updateSystemPromptBadge() {
-      const val = systemPromptEl.value.trim();
-      if (val.length > 0) {
-        systemPromptBadge.textContent = '🟢 Aktif (Gönderilecek)';
-        systemPromptBadge.className = 'badge badge-active';
-      } else {
-        systemPromptBadge.textContent = '🔘 Boş (Gönderilmeyecek)';
-        systemPromptBadge.className = 'badge badge-empty';
-      }
-      updatePayloadPreview();
+    // GÖRÜNÜM DEĞİŞTİRME
+    function switchView(viewName) {
+      document.getElementById('tabDashboard').classList.toggle('active', viewName === 'dashboard');
+      document.getElementById('tabPlayground').classList.toggle('active', viewName === 'playground');
+      document.getElementById('btnViewDashboard').classList.toggle('active', viewName === 'dashboard');
+      document.getElementById('btnViewPlayground').classList.toggle('active', viewName === 'playground');
     }
 
-    // Gönderilecek JSON Payload'unu Hazırla
-    function buildPayload() {
-      const endpoint = apiEndpointEl.value;
-      const model = modelSelectEl.value;
-      const effort = effortSelectEl.value;
-      const stream = streamToggleEl.checked;
-      const systemPrompt = systemPromptEl.value.trim();
-      const userPrompt = userPromptEl.value;
+    // WEBSOCKET BAĞLANTISI
+    function connectWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
 
-      const payload = {
-        model: model,
-        stream: stream
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        document.getElementById('wsDot').classList.remove('offline');
+        document.getElementById('wsText').textContent = 'Canlı Bağlantı';
       };
 
-      if (effort !== 'default') {
-        payload.reasoning_effort = effort;
-      }
+      ws.onclose = () => {
+        document.getElementById('wsDot').classList.add('offline');
+        document.getElementById('wsText').textContent = 'Yeniden Bağlanıyor...';
+        setTimeout(connectWebSocket, 3000);
+      };
 
-      if (endpoint === '/v1/chat/completions') {
-        const messages = [];
-        // KRİTİK KURAL: Sistem istemi sadece doluysa eklenir
-        if (systemPrompt.length > 0) {
-          messages.push({
-            role: "system",
-            content: systemPrompt
-          });
-        }
-        // Çok turlu sohbet geçmişi
-        if (multiTurnToggle && multiTurnToggle.checked && conversationHistory.length > 0) {
-          messages.push(...conversationHistory);
-        }
-        messages.push({
-          role: "user",
-          content: userPrompt || ""
-        });
-        payload.messages = messages;
-      } else {
-        // Responses API (/v1/responses)
-        // KRİTİK KURAL: Sistem istemi sadece doluysa instructions eklenir
-        if (systemPrompt.length > 0) {
-          payload.instructions = systemPrompt;
-        }
-        payload.input = [
-          {
-            role: "user",
-            content: userPrompt || ""
-          }
-        ];
-      }
+      ws.onerror = () => {
+        ws.close();
+      };
 
-      return payload;
-    }
-
-    function updatePayloadPreview() {
-      const payload = buildPayload();
-      payloadPreview.textContent = JSON.stringify(payload, null, 2);
-    }
-
-    // Payload Göster/Gizle
-    payloadHeader.addEventListener('click', () => {
-      payloadPreview.classList.toggle('open');
-      payloadArrow.textContent = payloadPreview.classList.contains('open') ? '▲' : '▼';
-    });
-
-    // Event Dinleyicileri
-    systemPromptEl.addEventListener('input', updateSystemPromptBadge);
-    userPromptEl.addEventListener('input', () => {
-      userCharCountEl.textContent = `${userPromptEl.value.length} karakter`;
-      updatePayloadPreview();
-    });
-    apiEndpointEl.addEventListener('change', updatePayloadPreview);
-    modelSelectEl.addEventListener('change', updatePayloadPreview);
-    effortSelectEl.addEventListener('change', updatePayloadPreview);
-    streamToggleEl.addEventListener('change', updatePayloadPreview);
-
-    // Ctrl+Enter Kısayolu
-    userPromptEl.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        if (!isGenerating) {
-          btnSend.click();
-        }
-      }
-    });
-
-    // Sunucu Sağlık Kontrolü
-    async function checkServerHealth() {
-      const base = gatewayUrlEl.value.trim().replace(/\/+$/, '');
-      try {
-        const startTime = Date.now();
-        const res = await fetch(`${base}/health`, { method: 'GET', signal: AbortSignal.timeout(2500) });
-        if (res.ok) {
-          const data = await res.json();
-          const latency = Date.now() - startTime;
-          statusDot.className = 'status-dot online';
-          statusText.textContent = `Çevrimiçi (${latency}ms | Cache: ${data.stats?.cacheHitRatio || '0%'})`;
-        } else {
-          statusDot.className = 'status-dot offline';
-          statusText.textContent = `Sunucu Hatası (${res.status})`;
-        }
-      } catch (err) {
-        statusDot.className = 'status-dot offline';
-        statusText.textContent = 'Bağlantı Yok (Sunucu Kapalı)';
-      }
-    }
-
-    setInterval(checkServerHealth, 5000);
-    checkServerHealth();
-
-    // Markdown Derleyici
-    function renderMarkdown(text) {
-      if (window.marked) {
+      ws.onmessage = (event) => {
         try {
-          return marked.parse(text);
-        } catch (e) {
-          // Fallback
+          const msg = JSON.parse(event.data);
+          handleWSMessage(msg);
+        } catch (err) {}
+      };
+    }
+
+    function handleWSMessage(msg) {
+      if (msg.type === 'init_state') {
+        currentAccounts = msg.data.accounts || [];
+        overrideSettings = msg.data.settings || overrideSettings;
+        renderAccounts();
+        applySettingsToUI();
+        if (msg.data.recent_requests) {
+          renderRecentRequests(msg.data.recent_requests);
         }
+      } else if (msg.type === 'accounts_update') {
+        currentAccounts = msg.data || [];
+        renderAccounts();
+      } else if (msg.type === 'settings_update') {
+        overrideSettings = msg.data || overrideSettings;
+        applySettingsToUI();
+      } else if (msg.type === 'request_event') {
+        prependLiveRequest(msg.data);
       }
-      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
     }
 
-    // Temizle Butonu
-    btnClear.addEventListener('click', () => {
-      conversationHistory = [];
-      systemPromptEl.value = '';
-      userPromptEl.value = '';
-      userCharCountEl.textContent = '0 karakter';
-      updateSystemPromptBadge();
-      fullOutputText = '';
-      fullThoughtText = '';
-      thoughtContainer.classList.remove('visible');
-      thoughtBody.textContent = '';
-      responseContainer.innerHTML = '';
-      responseContainer.appendChild(emptyState);
-      emptyState.style.display = 'flex';
-      errorAlert.style.display = 'none';
-      mStatus.textContent = 'Hazır';
-      mDuration.textContent = '-';
-      mPromptTokens.textContent = '0';
-      mCachedTokens.textContent = '0';
-      mOutputTokens.textContent = '0';
-      mTotalTokens.textContent = '0';
-    });
+    // OVERRIDE KONTROLLERİ
+    function applySettingsToUI() {
+      const toggle = document.getElementById('toggleOverride');
+      const switchCard = document.getElementById('switchCard');
+      const modeLabel = document.getElementById('overrideModeLabel');
+      const modeDesc = document.getElementById('overrideModeDesc');
+      const banner = document.getElementById('statusBanner');
+      const bannerText = document.getElementById('bannerText');
 
-    btnResetDefaults.addEventListener('click', () => {
-      gatewayUrlEl.value = 'http://127.0.0.1:8000';
-      apiEndpointEl.value = '/v1/chat/completions';
-      modelSelectEl.value = 'gemini-3.8-flash-medium';
-      effortSelectEl.value = 'default';
-      streamToggleEl.checked = true;
-      if (multiTurnToggle) multiTurnToggle.checked = false;
-      conversationHistory = [];
-      updatePayloadPreview();
-      checkServerHealth();
-    });
+      toggle.checked = overrideSettings.override_enabled;
+      switchCard.classList.toggle('active-override', overrideSettings.override_enabled);
 
-    // Cache Test Verisi Yükleyici
-    btnLoadCacheTest.addEventListener('click', () => {
-      modelSelectEl.value = 'gemini-3.8-flash-high';
-      const repeatBlock = "Enterprise cloud distributed architecture with consensus raft cluster, zero-trust network mTLS, distributed transaction saga pattern. ";
-      const big25k = "### KURUMSAL BULUT MİMARİSİ VE GÜVENLİK STANDARTLARI ŞARTNAMESİ ###\n\n" + repeatBlock.repeat(1100);
-      systemPromptEl.value = big25k;
-      userPromptEl.value = "What is this text about in 3 words?";
-      updateSystemPromptBadge();
-      userCharCountEl.textContent = `${userPromptEl.value.length} karakter`;
-      alert("✅ 25.000 Token'lık Cache Test Verisi Yüklendi (Model: gemini-3.8-flash-high)!\n\n1. İstek (Şimdi Gönderin): Model 25k veriyi işleyecek -> Cache: 0.\n2. İstek (Sistem istemine dokunmadan soruyu değiştirip Gönderin): -> Cache: 20.450 YEŞİL ⚡ HIT alacaksınız!");
-    });
+      if (overrideSettings.override_enabled) {
+        modeLabel.textContent = '⚡ Gateway Zorunlu Override';
+        modeLabel.style.color = 'var(--warning)';
+        modeDesc.textContent = 'OpenAI isteklerindeki model & efor çöpe atılır, seçilen değerler zorlanır.';
+        banner.className = 'status-banner override-on';
+        bannerText.innerHTML = `⚠️ <strong>Override Aktif:</strong> Tüm gelen DSH / OpenAI isteklerine zorla <strong>${overrideSettings.target_model}</strong> + <strong>${overrideSettings.thinking_effort}</strong> uygulanıyor!`;
+      } else {
+        modeLabel.textContent = 'Şeffaf Yönlendirme';
+        modeLabel.style.color = 'var(--text-main)';
+        modeDesc.textContent = 'Gelen OpenAI Router isteğindeki modeli baz alır.';
+        banner.className = 'status-banner';
+        bannerText.innerHTML = `ℹ️ Şu an <strong>Şeffaf Mod</strong> aktif: Gelen isteklerdeki model ve efor parametreleri olduğu gibi korunur.`;
+      }
 
-    // Kopyalama
-    btnCopyResponse.addEventListener('click', () => {
-      if (!fullOutputText) return;
-      navigator.clipboard.writeText(fullOutputText).then(() => {
-        const orig = btnCopyResponse.textContent;
-        btnCopyResponse.textContent = '✓ Kopyalandı!';
-        setTimeout(() => btnCopyResponse.textContent = orig, 1500);
+      // Pill seçimleri
+      document.querySelectorAll('#groupModel .pill-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('onclick').includes(overrideSettings.target_model));
       });
-    });
-
-    // Düşünme kutusu aç/kapa
-    thoughtHeader.addEventListener('click', () => {
-      thoughtBody.style.display = thoughtBody.style.display === 'none' ? 'block' : 'none';
-    });
-
-    // Durdur Butonu
-    btnStop.addEventListener('click', () => {
-      if (abortController) {
-        abortController.abort();
-        abortController = null;
-      }
-      finishGeneration('Durduruldu');
-    });
-
-    function finishGeneration(statusMsg = 'Tamamlandı') {
-      isGenerating = false;
-      btnSend.disabled = false;
-      btnStop.disabled = true;
-      mStatus.textContent = statusMsg;
-
-      // Çok turlu sohbet geçmişi kaydı
-      if (multiTurnToggle && multiTurnToggle.checked && fullOutputText) {
-        conversationHistory.push({ role: 'user', content: userPromptEl.value });
-        conversationHistory.push({ role: 'assistant', content: fullOutputText });
-      }
-
-      // Son render
-      if (fullOutputText) {
-        responseContainer.innerHTML = renderMarkdown(fullOutputText);
-      }
+      document.querySelectorAll('#groupEffort .pill-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('onclick').includes(overrideSettings.thinking_effort));
+      });
     }
 
-    // İSTEK GÖNDERME
-    btnSend.addEventListener('click', async () => {
-      const userText = userPromptEl.value.trim();
-      if (!userText) {
-        alert('Lütfen bir Kullanıcı İstemcisi (User Prompt) yazın.');
-        userPromptEl.focus();
+    function updateOverrideSettings() {
+      overrideSettings.override_enabled = document.getElementById('toggleOverride').checked;
+      saveSettings();
+    }
+
+    function selectModel(modelName) {
+      overrideSettings.target_model = modelName;
+      saveSettings();
+    }
+
+    function selectEffort(effort) {
+      overrideSettings.thinking_effort = effort;
+      saveSettings();
+    }
+
+    function saveSettings() {
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(overrideSettings)
+      }).then(res => res.json()).then(data => {
+        applySettingsToUI();
+      });
+    }
+
+    // HESAPLARI ÇİZ
+    function renderAccounts() {
+      const grid = document.getElementById('accountsGrid');
+      grid.innerHTML = '';
+
+      currentAccounts.forEach(acc => {
+        const card = document.createElement('div');
+        card.className = `account-card ${acc.is_active ? 'active' : ''}`;
+
+        // Kota hesaplamaları
+        let fiveHourPercent = 100;
+        let fiveHourReset = '-';
+        if (acc.quota && acc.quota.gemini_5h) {
+          fiveHourPercent = Math.round(acc.quota.gemini_5h.remaining_fraction * 100);
+          fiveHourReset = acc.quota.gemini_5h.description || acc.quota.gemini_5h.reset_time || '-';
+        }
+
+        let weeklyPercent = 100;
+        let weeklyReset = '-';
+        if (acc.quota && acc.quota.gemini_weekly) {
+          weeklyPercent = Math.round(acc.quota.gemini_weekly.remaining_fraction * 100);
+          weeklyReset = acc.quota.gemini_weekly.description || acc.quota.gemini_weekly.reset_time || '-';
+        }
+
+        const avatarContent = acc.picture 
+          ? `<img src="${acc.picture}" alt="${acc.name}">`
+          : (acc.name ? acc.name.charAt(0).toUpperCase() : 'G');
+
+        card.innerHTML = `
+          <div>
+            ${acc.is_active ? '<div class="active-badge">🟢 AKTİF HESAP</div>' : ''}
+            <div class="account-card-header">
+              <div class="account-avatar">${avatarContent}</div>
+              <div class="account-info">
+                <div class="account-name" title="${acc.name}">${acc.name}</div>
+                <div class="account-email" title="${acc.email}">${acc.email}</div>
+                <span class="tier-badge">⭐ ${acc.plan_type || 'PRO TIER'}</span>
+              </div>
+            </div>
+
+            <!-- KOTA BİLGİLERİ -->
+            <div class="quota-section">
+              <div class="quota-item">
+                <div class="quota-label-row">
+                  <span class="quota-name">5 Saatlik Limit</span>
+                  <span class="quota-val" style="color: ${fiveHourPercent < 20 ? '#ef4444' : (fiveHourPercent < 50 ? '#f59e0b' : '#10b981')}">%${fiveHourPercent} Kalan</span>
+                </div>
+                <div class="progress-bar-bg">
+                  <div class="progress-bar-fill ${fiveHourPercent < 30 ? 'warning' : ''}" style="width: ${fiveHourPercent}%;"></div>
+                </div>
+                <div class="quota-meta">
+                  <span>Sıfırlanma:</span>
+                  <span title="${fiveHourReset}">${fiveHourReset.length > 32 ? fiveHourReset.slice(0, 32) + '...' : fiveHourReset}</span>
+                </div>
+              </div>
+
+              <div class="quota-item" style="margin-top: 10px;">
+                <div class="quota-label-row">
+                  <span class="quota-name">Haftalık Limit</span>
+                  <span class="quota-val" style="color: ${weeklyPercent < 20 ? '#ef4444' : '#38bdf8'}">%${weeklyPercent} Kalan</span>
+                </div>
+                <div class="progress-bar-bg">
+                  <div class="progress-bar-fill ${weeklyPercent < 30 ? 'warning' : ''}" style="width: ${weeklyPercent}%;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- KART BUTONLARI -->
+          <div class="card-actions">
+            ${!acc.is_active ? `
+              <button class="btn btn-success" style="flex: 1;" onclick="setActiveAccount('${acc.id}')">
+                ✓ Bu Hesaba Geç
+              </button>
+            ` : `
+              <button class="btn" style="flex: 1; border-color: rgba(16, 185, 129, 0.4); color: #6ee7b7; cursor: default;">
+                🟢 Şu Anda Kullanılıyor
+              </button>
+            `}
+            <button class="btn" title="Kotayı Yenile" onclick="refreshQuota('${acc.id}')">🔄</button>
+            ${currentAccounts.length > 1 ? `
+              <button class="btn btn-danger" title="Hesabı Kaldır" onclick="deleteAccount('${acc.id}')">🗑️</button>
+            ` : ''}
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      // YENİ HESAP EKLE KARTI
+      const addCard = document.createElement('div');
+      addCard.className = 'add-account-card';
+      addCard.onclick = openAddAccountModal;
+      addCard.innerHTML = `
+        <div class="add-icon">+</div>
+        <div style="font-weight: 700; font-size: 15px; margin-bottom: 6px;">Yeni Pro Hesap Ekle</div>
+        <div style="font-size: 12px; color: var(--text-muted); max-width: 240px;">
+          Elinizdeki diğer Pro Google hesaplarını tek tıkla ekleyip yönetin.
+        </div>
+      `;
+      grid.appendChild(addCard);
+    }
+
+    function setActiveAccount(id) {
+      fetch('/api/accounts/active', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id })
+      }).then(res => res.json()).then(data => {
+        loadAccounts();
+      });
+    }
+
+    function refreshQuota(id) {
+      fetch('/api/accounts/refresh-quota', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id })
+      }).then(res => res.json()).then(data => {
+        loadAccounts();
+      });
+    }
+
+    function deleteAccount(id) {
+      if (!confirm("Bu hesabı kasadan kaldırmak istediğinize emin misiniz?")) return;
+      fetch('/api/accounts/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id })
+      }).then(res => res.json()).then(data => {
+        loadAccounts();
+      });
+    }
+
+    function loadAccounts() {
+      fetch('/api/accounts').then(res => res.json()).then(data => {
+        currentAccounts = data.accounts || [];
+        renderAccounts();
+      });
+    }
+
+    // MODAL
+    function openAddAccountModal() {
+      document.getElementById('addAccountModal').classList.add('open');
+    }
+
+    function closeAddAccountModal() {
+      document.getElementById('addAccountModal').classList.remove('open');
+    }
+
+    function importWindowsAccount() {
+      fetch('/api/accounts/import-windows', {
+        method: 'POST'
+      }).then(res => res.json()).then(data => {
+        if (data.status === 'ok') {
+          closeAddAccountModal();
+          alert(`✅ Hesap başarıyla içe aktarıldı: ${data.account.name} (${data.account.email})`);
+          loadAccounts();
+        } else {
+          alert(`❌ Hata: ${data.error}`);
+        }
+      }).catch(err => {
+        alert("Bağlantı hatası: " + err);
+      });
+    }
+
+    // CANLI İSTEK TABLOSU
+    function renderRecentRequests(requests) {
+      const tbody = document.getElementById('requestsTableBody');
+      if (!requests || requests.length === 0) return;
+      tbody.innerHTML = '';
+      requests.forEach(r => appendRequestRow(r, false));
+    }
+
+    function prependLiveRequest(req) {
+      const tbody = document.getElementById('requestsTableBody');
+      // Mevcut satır varsa güncelle
+      const existing = document.getElementById('req-' + req.id);
+      if (existing) {
+        existing.innerHTML = createRequestRowHTML(req);
         return;
       }
+      // İlk satır "Henüz bir istek gelmedi" ise temizle
+      if (tbody.children.length === 1 && tbody.children[0].innerText.includes('Henüz')) {
+        tbody.innerHTML = '';
+      }
+      const tr = document.createElement('tr');
+      tr.id = 'req-' + req.id;
+      tr.innerHTML = createRequestRowHTML(req);
+      tbody.insertBefore(tr, tbody.firstChild);
+    }
 
-      errorAlert.style.display = 'none';
-      emptyState.style.display = 'none';
-      responseContainer.innerHTML = '<span class="typing-cursor"></span>';
+    function createRequestRowHTML(req) {
+      const cacheDisplay = req.cached_tokens > 0 
+        ? `<span class="cache-hit-pill">⚡ ${req.cached_tokens.toLocaleString()} HIT</span>`
+        : `<span style="color: var(--text-dim);">0</span>`;
+
+      const statusBadge = req.status === 'completed'
+        ? `<span style="color: #34d399; font-weight: 700;">✓ Tamamlandı</span>`
+        : (req.status === 'running' 
+          ? `<span style="color: #38bdf8; font-weight: 700;">⏳ İşleniyor...</span>`
+          : `<span style="color: #ef4444; font-weight: 700;">❌ Hata</span>`);
+
+      return `
+        <td>
+          <span class="proc-tag">
+            <span>💻</span>
+            <span>${req.process_name}</span>
+            <span style="opacity: 0.6;">[PID: ${req.pid || '-'}]</span>
+          </span>
+        </td>
+        <td style="color: var(--text-muted); font-family: var(--font-mono);">${req.timestamp}</td>
+        <td><span style="font-family: var(--font-mono); font-size: 11px; background: rgba(255,255,255,0.05); padding: 3px 7px; border-radius: 4px;">${req.protocol}</span></td>
+        <td style="color: var(--text-muted); font-family: var(--font-mono);">${req.requested_model}</td>
+        <td>
+          <strong style="font-family: var(--font-mono); color: var(--primary);">${req.applied_model}</strong>
+          ${req.is_overridden ? '<span class="override-pill">OVERRIDE</span>' : ''}
+        </td>
+        <td style="font-size: 12px; color: var(--text-muted);">${req.thinking_effort}</td>
+        <td style="font-family: var(--font-mono);">${req.duration_ms ? req.duration_ms + 'ms' : '-'}</td>
+        <td style="font-family: var(--font-mono); font-size: 12px;">
+          <span style="color: var(--text-muted);">${req.input_tokens || 0}</span> / 
+          <span style="color: var(--text-main);">${req.output_tokens || 0}</span> | 
+          ${cacheDisplay}
+        </td>
+        <td>${statusBadge}</td>
+      `;
+    }
+
+    function clearLiveRequests() {
+      const tbody = document.getElementById('requestsTableBody');
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="9" style="text-align: center; color: var(--text-dim); padding: 24px;">
+            İstek geçmişi temizlendi. Gateway dinlemede...
+          </td>
+        </tr>
+      `;
+    }
+
+    // PLAYGROUND FUNCTIONS
+    function toggleThoughtBox() {
+      const body = document.getElementById('playThoughtBody');
+      const arrow = document.getElementById('thoughtToggleArrow');
+      if (body.style.display === 'none') {
+        body.style.display = 'block';
+        arrow.textContent = '▼ Daralt';
+      } else {
+        body.style.display = 'none';
+        arrow.textContent = '▶ Genişlet';
+      }
+    }
+
+    async function sendPlaygroundRequest() {
+      const endpoint = document.getElementById('playEndpoint').value;
+      const model = document.getElementById('playModel').value;
+      const effort = document.getElementById('playEffort').value;
+      const sysPrompt = document.getElementById('playSystemPrompt').value.trim();
+      const userPrompt = document.getElementById('playUserPrompt').value.trim();
+
+      const btnSend = document.getElementById('btnPlaySend');
+      const btnStop = document.getElementById('btnPlayStop');
+      const respView = document.getElementById('playResponseView');
+      const thoughtContainer = document.getElementById('playThoughtContainer');
+      const thoughtBody = document.getElementById('playThoughtBody');
+
+      btnSend.style.display = 'none';
+      btnStop.style.display = 'inline-flex';
+      respView.innerHTML = '<span style="color: var(--text-muted);">Model yanıtı hazırlanıyor...</span>';
       thoughtContainer.classList.remove('visible');
       thoughtBody.textContent = '';
-      thoughtBody.style.display = 'block';
-      fullOutputText = '';
-      fullThoughtText = '';
 
-      mPromptTokens.textContent = '...';
-      mOutputTokens.textContent = '...';
-      mTotalTokens.textContent = '...';
-      mCachedTokens.textContent = '...';
-      mDuration.textContent = '...';
+      playAbortController = new AbortController();
 
-      const base = gatewayUrlEl.value.trim().replace(/\/+$/, '');
-      const endpoint = apiEndpointEl.value;
-      const url = `${base}${endpoint}`;
-      const payload = buildPayload();
-      const isStream = payload.stream;
+      let payload = { model: model, stream: true };
+      if (effort !== 'default') payload.reasoning_effort = effort;
 
-      isGenerating = true;
-      btnSend.disabled = true;
-      btnStop.disabled = false;
-      mStatus.textContent = 'İstek Gönderildi...';
-      reqStartTime = Date.now();
+      if (endpoint === '/v1/chat/completions') {
+        const msgs = [];
+        if (sysPrompt) msgs.push({ role: "system", content: sysPrompt });
+        msgs.push({ role: "user", content: userPrompt });
+        payload.messages = msgs;
+      } else {
+        if (sysPrompt) payload.instructions = sysPrompt;
+        payload.input = [{ role: "user", content: userPrompt }];
+      }
 
-      abortController = new AbortController();
+      const t0 = performance.now();
+      let fullText = '';
+      let fullThought = '';
 
       try {
-        const response = await fetch(url, {
+        const res = await fetch(endpoint, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer local-test-key'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
-          signal: abortController.signal
+          signal: playAbortController.signal
         });
 
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(`HTTP ${response.status} (${response.statusText}): ${errText}`);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('event:')) continue;
+            if (trimmed.startsWith('data: ')) {
+              const dataStr = trimmed.slice(6);
+              if (dataStr === '[DONE]') continue;
+              try {
+                const parsed = JSON.parse(dataStr);
+                // Chat Completions
+                if (parsed.choices && parsed.choices[0]) {
+                  const delta = parsed.choices[0].delta || {};
+                  if (delta.reasoning_content) {
+                    fullThought += delta.reasoning_content;
+                    thoughtBody.textContent = fullThought;
+                    thoughtContainer.classList.add('visible');
+                  }
+                  if (delta.content) {
+                    fullText += delta.content;
+                    respView.innerHTML = marked.parse(fullText);
+                  }
+                }
+                // Usage
+                if (parsed.usage) {
+                  document.getElementById('mPrompt').textContent = parsed.usage.prompt_tokens || 0;
+                  document.getElementById('mOutput').textContent = parsed.usage.completion_tokens || 0;
+                  const cached = (parsed.usage.prompt_tokens_details && parsed.usage.prompt_tokens_details.cached_tokens) || 0;
+                  document.getElementById('mCache').textContent = cached > 0 ? `${cached.toLocaleString()} ⚡ HIT!` : '0';
+                }
+                // Responses API events
+                if (parsed.delta) {
+                  fullText += parsed.delta;
+                  respView.innerHTML = marked.parse(fullText);
+                }
+              } catch (e) {}
+            }
+          }
+          document.getElementById('mDuration').textContent = Math.round(performance.now() - t0) + 'ms';
         }
-
-        mStatus.textContent = 'Yanıt Alınıyor...';
-
-        if (isStream) {
-          // STREAMING MODU (SSE)
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder('utf-8');
-          let buffer = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop(); // Kalan tamamlanmamış satır
-
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed || trimmed.startsWith(':')) continue;
-
-              if (trimmed.startsWith('data: ')) {
-                const dataStr = trimmed.slice(6).trim();
-                if (dataStr === '[DONE]') {
-                  finishGeneration('Tamamlandı');
-                  continue;
-                }
-
-                try {
-                  const chunk = JSON.parse(dataStr);
-
-                  // 1. Chat Completions formatı
-                  if (endpoint === '/v1/chat/completions') {
-                    if (chunk.choices && chunk.choices[0]) {
-                      const delta = chunk.choices[0].delta || {};
-
-                      // Düşünme / Muhakeme metni
-                      if (delta.reasoning_content) {
-                        fullThoughtText += delta.reasoning_content;
-                        thoughtBody.textContent = fullThoughtText;
-                        thoughtContainer.classList.add('visible');
-                      }
-
-                      // Asıl çıktı metni
-                      if (delta.content) {
-                        fullOutputText += delta.content;
-                        responseContainer.innerHTML = renderMarkdown(fullOutputText) + '<span class="typing-cursor"></span>';
-                      }
-                    }
-                  } else {
-                    // 2. Responses API formatı (/v1/responses)
-                    if (chunk.type === 'response.reasoning_text.delta') {
-                      fullThoughtText += chunk.delta || '';
-                      thoughtBody.textContent = fullThoughtText;
-                      thoughtContainer.classList.add('visible');
-                    } else if (chunk.type === 'response.output_text.delta') {
-                      fullOutputText += chunk.delta || '';
-                      responseContainer.innerHTML = renderMarkdown(fullOutputText) + '<span class="typing-cursor"></span>';
-                    }
-                  }
-
-                  // Token kullanım metrikleri (Her iki format için genel yakalayıcı)
-                  const u = chunk.usage || chunk.response?.usage;
-                  if (u) {
-                    const promptTok = u.prompt_tokens ?? u.input_tokens ?? 0;
-                    const outputTok = u.completion_tokens ?? u.output_tokens ?? 0;
-                    const totalTok = u.total_tokens ?? (promptTok + outputTok);
-                    const cachedTok = u.prompt_tokens_details?.cached_tokens ?? u.input_tokens_details?.cached_tokens ?? 0;
-
-                    mPromptTokens.textContent = promptTok.toLocaleString();
-                    mOutputTokens.textContent = outputTok.toLocaleString();
-                    mTotalTokens.textContent = totalTok.toLocaleString();
-                    if (cachedTok > 0) {
-                      mCachedTokens.innerHTML = `${cachedTok.toLocaleString()} <span style="background: rgba(52, 211, 153, 0.25); color: #34d399; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; border: 1px solid rgba(52, 211, 153, 0.4);">⚡ HIT!</span>`;
-                    } else {
-                      mCachedTokens.textContent = '0';
-                    }
-                  }
-
-                  // Canlı süre güncelleme
-                  const elapsed = Date.now() - reqStartTime;
-                  mDuration.textContent = `${elapsed}ms`;
-
-                } catch (jsonErr) {
-                  // SSE parse hatası yok sayılır
-                }
-              }
-            }
-          }
-
-          finishGeneration('Tamamlandı');
-
-        } else {
-          // NON-STREAMING MODU
-          const data = await response.json();
-          const elapsed = Date.now() - reqStartTime;
-          mDuration.textContent = `${elapsed}ms`;
-
-          if (endpoint === '/v1/chat/completions') {
-            const msg = data.choices?.[0]?.message || {};
-            if (msg.reasoning_content) {
-              fullThoughtText = msg.reasoning_content;
-              thoughtBody.textContent = fullThoughtText;
-              thoughtContainer.classList.add('visible');
-            }
-            fullOutputText = msg.content || '';
-
-          } else {
-            // Responses format
-            if (data.output) {
-              for (const item of data.output) {
-                if (item.type === 'reasoning' && item.reasoning_text) {
-                  fullThoughtText = item.reasoning_text;
-                  thoughtBody.textContent = fullThoughtText;
-                  thoughtContainer.classList.add('visible');
-                } else if (item.type === 'message' && item.content) {
-                  for (const c of item.content) {
-                    if (c.text) fullOutputText += c.text;
-                  }
-                }
-              }
-            }
-          }
-
-          if (data.usage) {
-            const promptTok = data.usage.prompt_tokens ?? data.usage.input_tokens ?? 0;
-            const outputTok = data.usage.completion_tokens ?? data.usage.output_tokens ?? 0;
-            const totalTok = data.usage.total_tokens ?? (promptTok + outputTok);
-            const cachedTok = data.usage.prompt_tokens_details?.cached_tokens ?? data.usage.input_tokens_details?.cached_tokens ?? 0;
-
-            mPromptTokens.textContent = promptTok.toLocaleString();
-            mOutputTokens.textContent = outputTok.toLocaleString();
-            mTotalTokens.textContent = totalTok.toLocaleString();
-            if (cachedTok > 0) {
-              mCachedTokens.innerHTML = `${cachedTok.toLocaleString()} <span style="background: rgba(52, 211, 153, 0.25); color: #34d399; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; border: 1px solid rgba(52, 211, 153, 0.4);">⚡ HIT!</span>`;
-            } else {
-              mCachedTokens.textContent = '0';
-            }
-          }
-
-          responseContainer.innerHTML = renderMarkdown(fullOutputText);
-          finishGeneration('Tamamlandı');
-        }
-
       } catch (err) {
-        if (err.name === 'AbortError') {
-          mStatus.textContent = 'Durduruldu';
-        } else {
-          mStatus.textContent = 'Hata Oluştu';
-          errorAlert.textContent = `Hata: ${err.message}`;
-          errorAlert.style.display = 'block';
+        if (err.name !== 'AbortError') {
+          respView.innerHTML = `<span style="color: #ef4444;">Hata: ${err.message}</span>`;
         }
-        finishGeneration(mStatus.textContent);
+      } finally {
+        btnSend.style.display = 'inline-flex';
+        btnStop.style.display = 'none';
       }
+    }
+
+    function stopPlaygroundRequest() {
+      if (playAbortController) {
+        playAbortController.abort();
+      }
+    }
+
+    // Cache test butonu
+    document.getElementById('btnLoadCacheTest').addEventListener('click', () => {
+      document.getElementById('playModel').value = 'gemini-3.8-flash-high';
+      const repeatBlock = "Enterprise cloud distributed architecture with consensus raft cluster, zero-trust network mTLS, distributed transaction saga pattern. ";
+      const big25k = "### KURUMSAL BULUT MİMARİSİ VE GÜVENLİK STANDARTLARI ŞARTNAMESİ ###\n\n" + repeatBlock.repeat(1100);
+      document.getElementById('playSystemPrompt').value = big25k;
+      document.getElementById('playUserPrompt').value = "What is this text about in 3 words?";
+      alert("✅ 25.000 Token'lık Cache Test Verisi Yüklendi!\n\n1. Gönder'e basın -> Cache: 0.\n2. Ardından soru metnini değiştirip tekrar Gönder'e basın -> 20.450 token ⚡ HIT göreceksiniz!");
     });
 
-    // Başlangıç payload'ını çiz
-    updateSystemPromptBadge();
+    // BAŞLATMA
+    window.addEventListener('DOMContentLoaded', () => {
+      connectWebSocket();
+      loadAccounts();
+      fetch('/api/settings').then(res => res.json()).then(data => {
+        overrideSettings = data || overrideSettings;
+        applySettingsToUI();
+      });
+      fetch('/api/requests').then(res => res.json()).then(data => {
+        if (data && data.requests) renderRecentRequests(data.requests);
+      });
+    });
   </script>
 </body>
 </html>

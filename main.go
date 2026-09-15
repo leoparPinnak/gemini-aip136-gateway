@@ -40,7 +40,7 @@ var (
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, api-key")
 
 		if r.Method == http.MethodOptions {
@@ -61,12 +61,25 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 		cacheRatio = fmt.Sprintf("%.2f%%", float64(cached)/float64(input)*100)
 	}
 
+	activeAcc := GlobalAccountStore.GetActiveAccount()
+	activeEmail := "Bilinmiyor"
+	activeName := "Tanımsız"
+	if activeAcc != nil {
+		activeEmail = activeAcc.Email
+		activeName = activeAcc.Name
+	}
+
 	res := map[string]interface{}{
 		"status":         "online",
-		"name":           "DeepSeek Harness (DSH) Go Protocol Gateway",
-		"version":        "1.0.0 (Go Native TLS)",
+		"name":           "Gemini AIP-136 Control Center & Protocol Gateway",
+		"version":        "2.0.0 (Multi-Account & Process Inspector)",
 		"engine":         "Go net/http + crypto/tls",
 		"uptime_seconds": uptimeSeconds,
+		"active_account": map[string]string{
+			"email": activeEmail,
+			"name":  activeName,
+		},
+		"override_settings": GlobalSettingsManager.Get(),
 		"stats": map[string]interface{}{
 			"totalRequests":           atomic.LoadUint64(&totalRequests),
 			"responsesApiRequests":    atomic.LoadUint64(&responsesApiRequests),
@@ -77,10 +90,13 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 			"cacheHitRatio":           cacheRatio,
 		},
 		"endpoints": []string{
-			"GET /ui (Web Arayüzü / Playground)",
+			"GET /ui (Liquid Glass Dashboard & Playground)",
+			"GET /ws (Canlı WebSocket Akışı)",
 			"POST /v1/responses",
 			"POST /v1/chat/completions",
 			"GET /v1/models",
+			"GET /api/accounts",
+			"GET /api/settings",
 			"GET /health",
 		},
 	}
@@ -104,6 +120,107 @@ func handleModels(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func handleAccountsAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	path := strings.TrimPrefix(r.URL.Path, "/api/accounts")
+	path = strings.TrimPrefix(path, "/")
+
+	if r.Method == http.MethodGet {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"accounts": GlobalAccountStore.GetAllAccounts(),
+			"active":   GlobalAccountStore.GetActiveAccount(),
+		})
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		bodyBytes, _ := io.ReadAll(r.Body)
+
+		if path == "active" {
+			var body struct {
+				ID string `json:"id"`
+			}
+			_ = json.Unmarshal(bodyBytes, &body)
+			if err := GlobalAccountStore.SetActiveAccount(body.ID); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "active_id": body.ID})
+			return
+		}
+
+		if path == "import-windows" {
+			acc, err := GlobalAccountStore.ImportCurrentWindowsAccount()
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "account": acc})
+			return
+		}
+
+		if path == "refresh-quota" {
+			var body struct {
+				ID string `json:"id"`
+			}
+			_ = json.Unmarshal(bodyBytes, &body)
+			quota, err := GlobalAccountStore.RefreshAccountQuota(body.ID)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "quota": quota})
+			return
+		}
+
+		if path == "delete" {
+			var body struct {
+				ID string `json:"id"`
+			}
+			_ = json.Unmarshal(bodyBytes, &body)
+			if err := GlobalAccountStore.DeleteAccount(body.ID); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "deleted_id": body.ID})
+			return
+		}
+	}
+
+	http.Error(w, "Not found", http.StatusNotFound)
+}
+
+func handleSettingsAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method == http.MethodGet {
+		_ = json.NewEncoder(w).Encode(GlobalSettingsManager.Get())
+		return
+	}
+	if r.Method == http.MethodPost {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		var s OverrideSettings
+		if err := json.Unmarshal(bodyBytes, &s); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		GlobalSettingsManager.Update(s)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "settings": s})
+		return
+	}
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+func handleRequestsAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"requests": GlobalWSHub.GetRecentRequests(),
+	})
+}
+
 func handleResponses(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -114,13 +231,18 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 	atomic.AddUint64(&responsesApiRequests, 1)
 
 	reqStart := time.Now()
+	reqID := fmt.Sprintf("resp_%d", reqStart.UnixMilli())
+
+	// İstek atan sürecin PID ve adını bul
+	pid, procName := GlobalProcessInspector.ResolveClientProcess(r.RemoteAddr)
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Error reading request body", http.StatusBadRequest)
 		return
 	}
 
-	payload, _, targetModel, _, err := ConvertOpenAiRequestToGemini(body, "")
+	payload, _, targetModel, thinkingBudget, err := ConvertOpenAiRequestToGemini(body, "")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Protocol conversion error: %v", err), http.StatusBadRequest)
 		return
@@ -130,10 +252,39 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 	_ = json.Unmarshal(body, &parsed)
 	modelName, _ := parsed["model"].(string)
 	if modelName == "" {
-		modelName = "deepseek-v4-flash"
+		modelName = "gemini-3.8-flash-medium"
 	}
 
-	log.Printf("[POST /v1/responses] Model: %s -> %s\n", modelName, targetModel)
+	// Override yapıldı mı?
+	ovSettings := GlobalSettingsManager.Get()
+	isOverridden := ovSettings.OverrideEnabled
+
+	effortStr := "dynamic"
+	if thinkingBudget == 0 {
+		effortStr = "off"
+	} else if thinkingBudget > 0 {
+		effortStr = fmt.Sprintf("budget: %d", thinkingBudget)
+	} else if thinkingBudget == -1 {
+		effortStr = "high / auto"
+	}
+
+	// Canlı İstek Başlangıç Bildirimi
+	reqInfo := LiveRequestInfo{
+		ID:             reqID,
+		Timestamp:      reqStart.Format("15:04:05"),
+		PID:            pid,
+		ProcessName:    procName,
+		Protocol:       "OpenAI Responses API",
+		RequestedModel: modelName,
+		AppliedModel:   targetModel,
+		ThinkingEffort: effortStr,
+		IsOverridden:   isOverridden,
+		Status:         "running",
+	}
+	BroadcastRequestEvent(reqInfo)
+
+	log.Printf("[POST /v1/responses] PID: %d (%s) | Model: %s -> %s (Override: %v)\n",
+		pid, procName, modelName, targetModel, isOverridden)
 
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, no-transform")
@@ -147,12 +298,19 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 
+	elapsed := time.Since(reqStart).Milliseconds()
+
 	if err != nil {
 		log.Printf("[❌ /v1/responses Hata]: %v\n", err)
 		errData, _ := json.Marshal(map[string]interface{}{
 			"error": err.Error(),
 		})
 		fmt.Fprintf(w, "event: error\ndata: %s\n\n", string(errData))
+
+		reqInfo.Status = "error"
+		reqInfo.DurationMs = elapsed
+		reqInfo.ErrorMsg = err.Error()
+		BroadcastRequestEvent(reqInfo)
 		return
 	}
 
@@ -162,9 +320,17 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 	atomic.AddUint64(&totalOutputTokens, uint64(translator.outputTokens))
 	atomic.AddUint64(&totalCachedTokens, uint64(translator.cachedTokens))
 
-	elapsed := time.Since(reqStart).Milliseconds()
-	log.Printf("[✓ /v1/responses Tamamlandı] Süre: %dms | Prompt: %d | Cache: %d | Output: %d\n",
-		elapsed, translator.promptTokens, translator.cachedTokens, translator.outputTokens)
+	// Tamamlanma Bildirimi
+	reqInfo.Status = "completed"
+	reqInfo.DurationMs = elapsed
+	reqInfo.InputTokens = translator.promptTokens
+	reqInfo.OutputTokens = translator.outputTokens
+	reqInfo.CachedTokens = translator.cachedTokens
+	reqInfo.CacheHit = translator.cachedTokens > 0
+	BroadcastRequestEvent(reqInfo)
+
+	log.Printf("[✓ /v1/responses Tamamlandı] PID: %d | Süre: %dms | Prompt: %d | Cache: %d | Output: %d\n",
+		pid, elapsed, translator.promptTokens, translator.cachedTokens, translator.outputTokens)
 }
 
 func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
@@ -177,13 +343,18 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	atomic.AddUint64(&chatCompletionsRequests, 1)
 
 	reqStart := time.Now()
+	reqID := fmt.Sprintf("chatcmpl_%d", reqStart.UnixMilli())
+
+	// İstek atan sürecin PID ve adını bul
+	pid, procName := GlobalProcessInspector.ResolveClientProcess(r.RemoteAddr)
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Error reading request body", http.StatusBadRequest)
 		return
 	}
 
-	payload, _, targetModel, _, err := ConvertOpenAiRequestToGemini(body, "")
+	payload, _, targetModel, thinkingBudget, err := ConvertOpenAiRequestToGemini(body, "")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Protocol conversion error: %v", err), http.StatusBadRequest)
 		return
@@ -201,7 +372,34 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		isStream = s
 	}
 
-	log.Printf("[POST /v1/chat/completions] Model: %s -> %s | Stream: %v\n", modelName, targetModel, isStream)
+	ovSettings := GlobalSettingsManager.Get()
+	isOverridden := ovSettings.OverrideEnabled
+
+	effortStr := "dynamic"
+	if thinkingBudget == 0 {
+		effortStr = "off"
+	} else if thinkingBudget > 0 {
+		effortStr = fmt.Sprintf("budget: %d", thinkingBudget)
+	} else if thinkingBudget == -1 {
+		effortStr = "high / auto"
+	}
+
+	reqInfo := LiveRequestInfo{
+		ID:             reqID,
+		Timestamp:      reqStart.Format("15:04:05"),
+		PID:            pid,
+		ProcessName:    procName,
+		Protocol:       "Chat Completions",
+		RequestedModel: modelName,
+		AppliedModel:   targetModel,
+		ThinkingEffort: effortStr,
+		IsOverridden:   isOverridden,
+		Status:         "running",
+	}
+	BroadcastRequestEvent(reqInfo)
+
+	log.Printf("[POST /v1/chat/completions] PID: %d (%s) | Model: %s -> %s (Override: %v) | Stream: %v\n",
+		pid, procName, modelName, targetModel, isOverridden, isStream)
 
 	if isStream {
 		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
@@ -216,6 +414,8 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			return nil
 		})
 
+		elapsed := time.Since(reqStart).Milliseconds()
+
 		if err != nil {
 			log.Printf("[❌ /v1/chat/completions Hata]: %v\n", err)
 			errData, _ := json.Marshal(map[string]interface{}{
@@ -225,6 +425,11 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				},
 			})
 			fmt.Fprintf(w, "data: %s\n\n", string(errData))
+
+			reqInfo.Status = "error"
+			reqInfo.DurationMs = elapsed
+			reqInfo.ErrorMsg = err.Error()
+			BroadcastRequestEvent(reqInfo)
 			return
 		}
 
@@ -234,9 +439,16 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		atomic.AddUint64(&totalOutputTokens, uint64(translator.outputTokens))
 		atomic.AddUint64(&totalCachedTokens, uint64(translator.cachedTokens))
 
-		elapsed := time.Since(reqStart).Milliseconds()
-		log.Printf("[✓ /v1/chat/completions Tamamlandı] Süre: %dms | Prompt: %d | Cache: %d | Output: %d\n",
-			elapsed, translator.promptTokens, translator.cachedTokens, translator.outputTokens)
+		reqInfo.Status = "completed"
+		reqInfo.DurationMs = elapsed
+		reqInfo.InputTokens = translator.promptTokens
+		reqInfo.OutputTokens = translator.outputTokens
+		reqInfo.CachedTokens = translator.cachedTokens
+		reqInfo.CacheHit = translator.cachedTokens > 0
+		BroadcastRequestEvent(reqInfo)
+
+		log.Printf("[✓ /v1/chat/completions Tamamlandı] PID: %d | Süre: %dms | Prompt: %d | Cache: %d | Output: %d\n",
+			pid, elapsed, translator.promptTokens, translator.cachedTokens, translator.outputTokens)
 	} else {
 		// Non-streaming response
 		var thoughtText strings.Builder
@@ -251,20 +463,19 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				usage = chunk.UsageMetadata
 			}
 
-			var cands []GeminiCandidate
-			if len(chunk.Response.Candidates) > 0 {
-				cands = chunk.Response.Candidates
-			} else if len(chunk.Candidates) > 0 {
-				cands = chunk.Candidates
+			candidates := chunk.Response.Candidates
+			if len(candidates) == 0 {
+				candidates = chunk.Candidates
 			}
 
-			for _, c := range cands {
+			for _, c := range candidates {
 				for _, p := range c.Content.Parts {
-					if p.Thought && p.Text != "" {
+					if p.Thought {
 						thoughtText.WriteString(p.Text)
 					} else if p.Text != "" {
 						outputText.WriteString(p.Text)
-					} else if p.FunctionCall != nil {
+					}
+					if p.FunctionCall != nil {
 						fnCalls = append(fnCalls, *p.FunctionCall)
 					}
 				}
@@ -272,68 +483,64 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			return nil
 		})
 
+		elapsed := time.Since(reqStart).Milliseconds()
+
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("[❌ /v1/chat/completions Hata]: %v\n", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": err.Error(),
+					"type":    "gemini_gateway_error",
+				},
+			})
+			reqInfo.Status = "error"
+			reqInfo.DurationMs = elapsed
+			reqInfo.ErrorMsg = err.Error()
+			BroadcastRequestEvent(reqInfo)
 			return
 		}
 
-		respID := fmt.Sprintf("chatcmpl-%d", time.Now().UnixMilli())
-		msgObj := map[string]interface{}{
-			"role":    "assistant",
-			"content": outputText.String(),
-		}
-		if thoughtText.Len() > 0 {
-			msgObj["reasoning_content"] = thoughtText.String()
-		}
-
-		if len(fnCalls) > 0 {
-			var tcList []map[string]interface{}
-			for _, fc := range fnCalls {
-				b, _ := json.Marshal(fc.Args)
-				tcList = append(tcList, map[string]interface{}{
-					"id":   fc.ID,
-					"type": "function",
-					"function": map[string]interface{}{
-						"name":      fc.Name,
-						"arguments": string(b),
-					},
-				})
-			}
-			msgObj["tool_calls"] = tcList
-		}
-
-		finishReason := "stop"
-		if len(fnCalls) > 0 {
-			finishReason = "tool_calls"
-		}
-
 		promptTokens := 0
-		candidatesTokens := 0
+		outputTokens := 0
 		cachedTokens := 0
-		totalTokens := 0
 		if usage != nil {
 			promptTokens = usage.PromptTokenCount
-			candidatesTokens = usage.CandidatesTokenCount
+			outputTokens = usage.CandidatesTokenCount
 			cachedTokens = usage.CachedContentTokenCount
-			totalTokens = usage.TotalTokenCount
 		}
 
+		atomic.AddUint64(&totalInputTokens, uint64(promptTokens))
+		atomic.AddUint64(&totalOutputTokens, uint64(outputTokens))
+		atomic.AddUint64(&totalCachedTokens, uint64(cachedTokens))
+
+		reqInfo.Status = "completed"
+		reqInfo.DurationMs = elapsed
+		reqInfo.InputTokens = promptTokens
+		reqInfo.OutputTokens = outputTokens
+		reqInfo.CachedTokens = cachedTokens
+		reqInfo.CacheHit = cachedTokens > 0
+		BroadcastRequestEvent(reqInfo)
+
 		resp := map[string]interface{}{
-			"id":      respID,
+			"id":      reqID,
 			"object":  "chat.completion",
 			"created": time.Now().Unix(),
 			"model":   modelName,
 			"choices": []map[string]interface{}{
 				{
-					"index":         0,
-					"message":       msgObj,
-					"finish_reason": finishReason,
+					"index": 0,
+					"message": map[string]interface{}{
+						"role":    "assistant",
+						"content": outputText.String(),
+					},
+					"finish_reason": "stop",
 				},
 			},
 			"usage": map[string]interface{}{
 				"prompt_tokens":     promptTokens,
-				"completion_tokens": candidatesTokens,
-				"total_tokens":      totalTokens,
+				"completion_tokens": outputTokens,
+				"total_tokens":      promptTokens + outputTokens,
 				"prompt_tokens_details": map[string]interface{}{
 					"cached_tokens": cachedTokens,
 				},
@@ -358,6 +565,17 @@ func main() {
 		}
 	}
 
+	// 1. Çoklu Hesap Yönetimini Başlat (Mevcut Windows hesabını otomatik yükler)
+	if err := InitAccountStore(); err != nil {
+		log.Printf("[UYARI] Hesap yöneticisi başlatılamadı: %v", err)
+	}
+
+	// 2. Model & Düşünme Override Yöneticisini Başlat
+	InitSettingsManager()
+
+	// 3. İstek Yapan Program / PID İzleyicisini Başlat
+	InitProcessInspector()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleHealth)
 	mux.HandleFunc("/health", handleHealth)
@@ -370,17 +588,33 @@ func main() {
 	mux.HandleFunc("/v1/chat/completions", handleChatCompletions)
 	mux.HandleFunc("/chat/completions", handleChatCompletions)
 
+	// Canlı WebSocket & SSE Uç Noktaları
+	mux.HandleFunc("/ws", handleWebSocket)
+	mux.HandleFunc("/api/events", handleSSEEvents)
+
+	// Çoklu Hesap REST API
+	mux.HandleFunc("/api/accounts", handleAccountsAPI)
+	mux.HandleFunc("/api/accounts/", handleAccountsAPI)
+
+	// Override Ayarları REST API
+	mux.HandleFunc("/api/settings", handleSettingsAPI)
+
+	// Canlı İstek Geçmişi
+	mux.HandleFunc("/api/requests", handleRequestsAPI)
+
 	handler := corsMiddleware(mux)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	fmt.Println(strings.Repeat("=", 70))
-	fmt.Printf("⚡ DSH Go Protocol Gateway Aktif!\n")
-	fmt.Printf("🌐 Dinleme Adresi     : http://%s\n", addr)
-	fmt.Printf("🔒 TLS Parmak İzi     : Go Native crypto/tls (Antigravity CLI ile 1:1)\n")
-	fmt.Printf("🖥️  Test Arayüzü (Web) : http://%s/ui\n", addr)
-	fmt.Printf("📡 OpenAI Responses   : http://%s/v1/responses\n", addr)
-	fmt.Printf("📡 Chat Completions   : http://%s/v1/chat/completions\n", addr)
-	fmt.Printf("📊 Sağlık & Metrikler : http://%s/health\n", addr)
+	fmt.Printf("⚡ Gemini AIP-136 Control Center & Protocol Gateway (v2.0)\n")
+	fmt.Printf("🌐 Dinleme Adresi       : http://%s\n", addr)
+	fmt.Printf("🔒 TLS Parmak İzi       : Go Native crypto/tls (Antigravity CLI ile 1:1)\n")
+	fmt.Printf("🖥️  Modern Dashboard UI  : http://%s/ui\n", addr)
+	fmt.Printf("🔌 Canlı WebSocket       : ws://%s/ws\n", addr)
+	fmt.Printf("👥 Çoklu Hesap Kasası   : /api/accounts\n")
+	fmt.Printf("📡 OpenAI Responses     : http://%s/v1/responses\n", addr)
+	fmt.Printf("📡 Chat Completions     : http://%s/v1/chat/completions\n", addr)
+	fmt.Printf("📊 Sağlık & Metrikler   : http://%s/health\n", addr)
 	fmt.Println(strings.Repeat("=", 70))
 
 	server := &http.Server{
