@@ -271,23 +271,24 @@
       filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
     }
 
-    /* Kromatik Prizmatik Metin ("Pro") */
+    /* Kromatik Prizmatik Metin ("Pro") - Yüksek Kontrastlı ve Keskin Hatlı */
     .metal-text-chromatic {
       font-weight: 800;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.01em;
       background: linear-gradient(
         135deg,
-        #60a5fa 0%,   /* Buzul Mavi */
-        #f472b6 25%,  /* Kromatik Pembe */
-        #e2e8f0 45%,  /* Platin Beyaz */
-        #c084fc 70%,  /* Neon Mor */
-        #38bdf8 100%  /* Gökyüzü Mavi */
+        #38bdf8 0%,   /* Canlı Gökyüzü Mavi */
+        #f43f5e 25%,  /* Canlı Rose/Pembe */
+        #ffffff 50%,  /* Net Beyaz Specular Işıma */
+        #a855f7 75%,  /* Neon Mor */
+        #06b6d4 100%  /* Elektrik Camgöbeği */
       );
       background-size: 250% auto;
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      animation: metal-shimmer 5s ease-in-out infinite alternate;
-      filter: drop-shadow(0 2px 8px rgba(192, 132, 252, 0.4));
+      animation: metal-shimmer 6s ease-in-out infinite alternate;
+      /* Parlak geçişlerde harf sınırlarını koruyan yüksek kontrastlı çift gölge */
+      filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 1px rgba(0, 0, 0, 0.85));
     }
 
     /* Işığın Metal Yüzeyde Akma Animasyonu */
@@ -297,36 +298,85 @@
       100% { background-position: 0% 50%; }
     }
 
-    /* "NEW", "PRO" ve "Live mode" Parlayan Metal Rozeti */
+    /* "NEW", "PRO" ve "Live mode" Parlayan Metal Rozeti - Keskin Okunabilirlik */
     .metal-badge-pill {
       position: relative;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 0.2rem 0.65rem;
+      gap: 0.35rem;
+      padding: 0.22rem 0.65rem;
       border-radius: 9999px;
       font-size: 0.68rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
+      font-weight: 800;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
-      background: #090d16;
-      color: #f8fafc;
+      background: #090e1a; /* Çok koyu katı obsidyen taban */
+      color: #ffffff;      /* Saf parlak beyaz metin */
       isolation: isolate;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
       box-shadow: 
-        inset 0 0 0 1px rgba(255, 255, 255, 0.25),
-        0 4px 14px rgba(0, 0, 0, 0.35);
+        inset 0 1px 1px rgba(255, 255, 255, 0.35),
+        inset 0 -1px 1px rgba(0, 0, 0, 0.7),
+        0 2px 8px rgba(0, 0, 0, 0.4);
     }
 
     /* Çeperdeki Parlayan Titanyum/Gümüş Çerçeve */
     .metal-badge-pill::before {
       content: '';
       position: absolute;
-      inset: -1.5px;
+      inset: -1px;
       border-radius: inherit;
-      background: linear-gradient(135deg, #c0c0c0, #ffffff, #888888, #e0e0e0, #666666);
+      background: linear-gradient(135deg, #71717a, #ffffff, #52525b, #e4e4e7, #3f3f46);
       background-size: 300% 300%;
       z-index: -1;
       animation: metal-shimmer 4s ease infinite;
+    }
+
+    /* Canlı İstek: Atanan Pro Hesap Çipi (Kromatik Çerçeve ve Yüksek Kontrast) */
+    .pro-account-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 0.5rem;
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(9, 13, 22, 0.98) 100%);
+      border: 1px solid rgba(96, 165, 250, 0.35);
+      box-shadow: 
+        inset 0 1px 1px 0 rgba(255, 255, 255, 0.15),
+        inset 0 -1px 1px 0 rgba(0, 0, 0, 0.7),
+        0 2px 6px -1px rgba(0, 0, 0, 0.4);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      max-width: 220px;
+    }
+    .pro-account-chip:hover {
+      border-color: rgba(147, 197, 253, 0.6);
+      box-shadow: 
+        inset 0 1px 1px 0 rgba(255, 255, 255, 0.25),
+        0 0 12px rgba(96, 165, 250, 0.3);
+      transform: translateY(-0.5px);
+    }
+    .pro-account-chip .pro-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 9999px;
+      background-color: #34d399;
+      box-shadow: 0 0 8px rgba(52, 211, 153, 0.9);
+      flex-shrink: 0;
+    }
+    .pro-account-chip .pro-badge-mini {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.05rem 0.35rem;
+      border-radius: 0.25rem;
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      background: rgba(59, 130, 246, 0.25);
+      color: #93c5fd;
+      border: 1px solid rgba(96, 165, 250, 0.4);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+      flex-shrink: 0;
     }
   </style>
 </head>
@@ -1726,10 +1776,16 @@
           </button>
         </td>
         <td class="px-4 py-2.5">
-          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-primary/10 text-primary border border-primary/20" title="Atanan Hesap: ${req.assigned_account || '-'} (Kural: ${req.routing_rule || 'Aktif'})">
-            <span class="size-1.5 rounded-full bg-emerald-400"></span>
-            ${req.assigned_account_name || req.assigned_account || 'Varsayılan Hesap'}
-          </span>
+          <div class="pro-account-chip" title="Atanan Hesap: ${req.assigned_account || '-'} (Kural: ${req.routing_rule || 'Aktif'})">
+            <span class="pro-dot"></span>
+            <div class="flex flex-col min-w-0">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="text-xs font-semibold text-foreground truncate max-w-[130px]">${req.assigned_account_name || req.assigned_account || 'Varsayılan Hesap'}</span>
+                <span class="pro-badge-mini">PRO</span>
+              </div>
+              ${req.routing_rule ? `<span class="text-[9px] text-muted-foreground font-mono truncate max-w-[150px] leading-tight">${req.routing_rule}</span>` : ''}
+            </div>
+          </div>
         </td>
         <td class="px-4 py-2.5 font-mono text-muted-foreground text-[11px]">${req.timestamp}</td>
         <td class="px-4 py-2.5 font-mono text-muted-foreground text-[11px]">${req.protocol}</td>
