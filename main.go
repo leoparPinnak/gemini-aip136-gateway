@@ -125,6 +125,17 @@ func handleAccountsAPI(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/accounts")
 	path = strings.TrimPrefix(path, "/")
 
+	if path == "auth-url" {
+		authURL, state, err := GenerateAuthURL()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"auth_url": authURL, "state": state})
+		return
+	}
+
 	if r.Method == http.MethodGet {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"accounts": GlobalAccountStore.GetAllAccounts(),
@@ -135,6 +146,37 @@ func handleAccountsAPI(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost {
 		bodyBytes, _ := io.ReadAll(r.Body)
+
+		if path == "exchange-code" {
+			var body struct {
+				Code  string `json:"code"`
+				State string `json:"state"`
+			}
+			_ = json.Unmarshal(bodyBytes, &body)
+			acc, err := GlobalAccountStore.ExchangeOAuthCode(body.Code, body.State)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "account": acc})
+			return
+		}
+
+		if path == "add-token" {
+			var body struct {
+				RefreshToken string `json:"refresh_token"`
+			}
+			_ = json.Unmarshal(bodyBytes, &body)
+			acc, err := GlobalAccountStore.AddRefreshToken(body.RefreshToken)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "account": acc})
+			return
+		}
 
 		if path == "active" {
 			var body struct {

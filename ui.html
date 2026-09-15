@@ -673,12 +673,12 @@
   <!-- 4. MODAL: YENİ HESAP EKLEME DİYALOĞU       -->
   <!-- ========================================== -->
   <div id="addAccountModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-    <div class="flex flex-col gap-4 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-lg animate-in fade-in zoom-in-95 duration-150">
+    <div class="flex flex-col gap-4 w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-lg animate-in fade-in zoom-in-95 duration-150">
       
       <div class="flex items-center justify-between border-b border-border pb-3">
         <div class="flex flex-col gap-0.5">
           <h3 class="text-base font-semibold text-foreground">Yeni Google Pro Hesap Ekle</h3>
-          <p class="text-xs text-muted-foreground">Windows Credential Manager ile güvenli içe aktarma</p>
+          <p class="text-xs text-muted-foreground">Google OAuth 2.0 veya yerel Windows oturumu ile hesabı bağlayın</p>
         </div>
         <button onclick="closeAddAccountModal()" class="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted">
           <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -687,10 +687,67 @@
         </button>
       </div>
 
-      <div class="flex flex-col gap-3 text-xs">
+      <!-- Modal Sekmeleri -->
+      <div class="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted border border-border">
+        <button id="modalTabOAuthBtn" onclick="switchModalTab('oauth')" class="py-1.5 text-xs font-medium rounded-md bg-background text-foreground shadow-xs transition-all">
+          🌐 Google OAuth (Önerilen)
+        </button>
+        <button id="modalTabWindowsBtn" onclick="switchModalTab('windows')" class="py-1.5 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground transition-all">
+          💻 Windows (agy auth login)
+        </button>
+      </div>
+
+      <!-- SEKME 1: GOOGLE OAUTH URL & KOD YAPISTIR -->
+      <div id="modalTabOAuth" class="flex flex-col gap-3 text-xs">
+        
+        <!-- Adım 1: Linki Al ve Aç -->
+        <div class="p-3 rounded-lg border border-border bg-background flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="font-medium text-foreground">Adım 1: Google İzin Linkini Açın</span>
+            <span class="text-[10px] text-muted-foreground">PKCE S256 Güvenli</span>
+          </div>
+          <p class="text-muted-foreground">Aşağıdaki butona tıklayarak tarayıcınızda yeni Pro hesabınızı seçip erişim izni verin:</p>
+          <button onclick="startGoogleOAuthFlow()" id="btnStartOAuth" class="w-full inline-flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-medium bg-secondary text-secondary-foreground hover:bg-accent border border-border transition-colors">
+            <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+            </svg>
+            <span id="btnStartOAuthText">Tarayıcıda Google Giriş Sayfasını Aç</span>
+          </button>
+          <div id="oauthLinkDisplay" class="hidden flex flex-col gap-1 pt-1">
+            <span class="text-[10px] text-muted-foreground">Oluşturulan yetkilendirme linki (gerekirse kopyalayın):</span>
+            <div class="flex items-center gap-1.5">
+              <input type="text" id="inpAuthURL" readonly class="flex-1 bg-muted border border-border rounded px-2 py-1 font-mono text-[10px] text-foreground focus:outline-none">
+              <button onclick="copyAuthURL()" class="px-2 py-1 rounded bg-secondary hover:bg-accent border border-border text-[10px] font-medium text-foreground shrink-0">Kopyala</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Adım 2: Kodu veya Yönlendirme Linkini Yapıştır -->
+        <div class="p-3 rounded-lg border border-border bg-background flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="font-medium text-foreground">Adım 2: Onay Linkini veya Kodu Yapıştırın</span>
+            <span class="text-[10px] text-emerald-400 font-medium">Otomatik Takas</span>
+          </div>
+          <p class="text-muted-foreground">Onay verdikten sonra adres çubuğundaki linki veya <code class="px-1 py-0.5 rounded bg-muted font-mono text-[11px] text-primary">code=...</code> kodunu buraya yapıştırın:</p>
+          <input type="text" id="inpOAuthCode" placeholder="https://antigravity.google/oauth-callback?code=4/0ATs... veya 4/0ATs..." class="w-full bg-muted border border-border rounded-md px-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary">
+        </div>
+
+        <div class="flex items-center gap-2 pt-1">
+          <button onclick="submitOAuthCode()" id="btnSubmitCode" class="flex-1 inline-flex items-center justify-center gap-2 py-2 px-4 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 shadow-xs transition-opacity">
+            <span id="btnSubmitCodeText">⚡ Hesabı Doğrula ve Kasaya Ekle</span>
+          </button>
+          <button onclick="closeAddAccountModal()" class="py-2 px-3 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-colors">
+            İptal
+          </button>
+        </div>
+
+      </div>
+
+      <!-- SEKME 2: WINDOWS CREDENTIAL IMPORT -->
+      <div id="modalTabWindows" class="hidden flex flex-col gap-3 text-xs">
         <div class="p-3 rounded-lg border border-border bg-background flex flex-col gap-1.5">
           <span class="font-medium text-foreground">Adım 1: Terminalde Yeni Hesapla Giriş Yapın</span>
-          <p class="text-muted-foreground">PowerShell veya CMD penceresinde şu komutu çalıştırarak eklemek istediğiniz Google hesabıyla oturum açın:</p>
+          <p class="text-muted-foreground">PowerShell veya CMD penceresinde şu komutu çalıştırarak oturum açın:</p>
           <div class="p-2 rounded bg-muted font-mono text-[11px] text-foreground flex items-center justify-between">
             <span>agy auth login</span>
             <button onclick="navigator.clipboard.writeText('agy auth login')" class="text-muted-foreground hover:text-foreground text-[10px] uppercase font-bold">Kopyala</button>
@@ -699,22 +756,22 @@
 
         <div class="p-3 rounded-lg border border-border bg-background flex flex-col gap-1">
           <span class="font-medium text-foreground">Adım 2: Tarayıcıda Onaylayın</span>
-          <p class="text-muted-foreground">Açılan Google yetkilendirme penceresinde Pro hesabınızı seçip erişim iznini onaylayın.</p>
+          <p class="text-muted-foreground">Açılan Google penceresinde Pro hesabınızı seçip erişim iznini onaylayın.</p>
         </div>
 
         <div class="p-3 rounded-lg border border-border bg-background flex flex-col gap-1">
           <span class="font-medium text-foreground">Adım 3: Kasaya İçe Aktarın</span>
           <p class="text-muted-foreground">Oturum açıldıktan sonra aşağıdaki butona tıklayın. Gateway yeni oturumu mevcut hesapların yanına ekler.</p>
         </div>
-      </div>
 
-      <div class="flex items-center gap-2 pt-2">
-        <button onclick="importWindowsAccount()" class="flex-1 inline-flex items-center justify-center gap-2 py-2 px-4 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 shadow-xs transition-opacity">
-          <span>📥 Windows Oturumunu İçe Aktar</span>
-        </button>
-        <button onclick="closeAddAccountModal()" class="py-2 px-3 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-colors">
-          İptal
-        </button>
+        <div class="flex items-center gap-2 pt-1">
+          <button onclick="importWindowsAccount()" class="flex-1 inline-flex items-center justify-center gap-2 py-2 px-4 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 shadow-xs transition-opacity">
+            <span>📥 Windows Oturumunu İçe Aktar</span>
+          </button>
+          <button onclick="closeAddAccountModal()" class="py-2 px-3 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-colors">
+            İptal
+          </button>
+        </div>
       </div>
 
     </div>
@@ -982,7 +1039,91 @@
       });
     }
 
-    // 4. Modal Functions
+    // 4. Modal Functions & Google OAuth Flow
+    let currentOAuthState = "";
+
+    function switchModalTab(tab) {
+      const isOAuth = tab === 'oauth';
+      document.getElementById('modalTabOAuth').classList.toggle('hidden', !isOAuth);
+      document.getElementById('modalTabWindows').classList.toggle('hidden', isOAuth);
+      
+      const btnOAuth = document.getElementById('modalTabOAuthBtn');
+      const btnWin = document.getElementById('modalTabWindowsBtn');
+      
+      if (isOAuth) {
+        btnOAuth.className = "py-1.5 text-xs font-medium rounded-md bg-background text-foreground shadow-xs transition-all";
+        btnWin.className = "py-1.5 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground transition-all";
+      } else {
+        btnWin.className = "py-1.5 text-xs font-medium rounded-md bg-background text-foreground shadow-xs transition-all";
+        btnOAuth.className = "py-1.5 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground transition-all";
+      }
+    }
+
+    async function startGoogleOAuthFlow() {
+      const btnText = document.getElementById('btnStartOAuthText');
+      btnText.textContent = "Bağlantı Alınıyor...";
+      try {
+        const res = await fetch('/api/accounts/auth-url');
+        const data = await res.json();
+        if (data.auth_url) {
+          currentOAuthState = data.state || "";
+          document.getElementById('inpAuthURL').value = data.auth_url;
+          document.getElementById('oauthLinkDisplay').classList.remove('hidden');
+          window.open(data.auth_url, '_blank');
+          btnText.textContent = "Google Giriş Sayfası Açıldı ✓ (Tekrar Aç)";
+        } else {
+          alert("Hata: " + (data.error || "Yetkilendirme linki alınamadı"));
+          btnText.textContent = "Tarayıcıda Google Giriş Sayfasını Aç";
+        }
+      } catch (err) {
+        alert("Bağlantı hatası: " + err);
+        btnText.textContent = "Tarayıcıda Google Giriş Sayfasını Aç";
+      }
+    }
+
+    function copyAuthURL() {
+      const inp = document.getElementById('inpAuthURL');
+      inp.select();
+      navigator.clipboard.writeText(inp.value);
+      alert("Google yetkilendirme linki panoya kopyalandı!");
+    }
+
+    async function submitOAuthCode() {
+      const inp = document.getElementById('inpOAuthCode');
+      const val = inp.value.trim();
+      if (!val) {
+        alert("Lütfen Google onayından sonra tarayıcıda oluşan linki veya kodu yapıştırın!");
+        inp.focus();
+        return;
+      }
+
+      const btnText = document.getElementById('btnSubmitCodeText');
+      btnText.textContent = "Doğrulanıyor & Ekleniyor...";
+      document.getElementById('btnSubmitCode').disabled = true;
+
+      try {
+        const res = await fetch('/api/accounts/exchange-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: val, state: currentOAuthState })
+        });
+        const data = await res.json();
+        if (data.status === 'ok' && data.account) {
+          closeAddAccountModal();
+          inp.value = '';
+          alert(`🎉 Yeni Google Pro Hesabı Başarıyla Eklendi:\n${data.account.name} (${data.account.email})`);
+          loadAccounts();
+        } else {
+          alert("❌ Hata: " + (data.error || "Kod doğrulanamadı"));
+        }
+      } catch (err) {
+        alert("Ağ hatası: " + err);
+      } finally {
+        btnText.textContent = "⚡ Hesabı Doğrula ve Kasaya Ekle";
+        document.getElementById('btnSubmitCode').disabled = false;
+      }
+    }
+
     function openAddAccountModal() {
       const m = document.getElementById('addAccountModal');
       m.classList.remove('hidden');
