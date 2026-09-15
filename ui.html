@@ -1815,21 +1815,16 @@
 
           card.innerHTML = `
             <div class="flex items-center justify-between gap-2">
-              <button onclick="inspectProcessNetwork(${app.pid}, '${safeName}')" class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted/80 hover:bg-muted border border-border hover:border-primary/50 font-mono text-[11px] text-foreground transition-all cursor-pointer group text-left min-w-0" title="Ağ ve Sunucu Portlarını İncele">
-                <svg class="size-3 text-muted-foreground group-hover:text-primary transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="size-2 rounded-full bg-emerald-400 shrink-0"></span>
+                <span id="app-name-${app.pid}" class="font-mono font-semibold text-xs text-foreground truncate" title="${app.display_name}">${app.display_name}</span>
+              </div>
+              <button onclick="inspectProcessNetwork(${app.pid}, '${safeName}')" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-muted hover:bg-muted/80 border border-border hover:border-primary/50 font-mono text-[11px] text-foreground transition-all cursor-pointer group shrink-0" title="Ağ ve Sunucu Portlarını İncele">
+                <svg class="size-3 text-muted-foreground group-hover:text-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
                 </svg>
-                <span class="size-1.5 rounded-full bg-emerald-400 shrink-0"></span>
-                <strong class="group-hover:text-primary transition-colors truncate text-xs" id="app-name-${app.pid}" title="${app.display_name}">${app.display_name}</strong>
-                <span class="text-muted-foreground text-[10px] shrink-0">[PID: ${app.pid}]</span>
-                <span class="text-[9px] px-1 rounded bg-primary/10 text-primary opacity-80 group-hover:opacity-100 transition-opacity shrink-0">Ağ ↗</span>
-              </button>
-
-              <button onclick="inspectProcessNetwork(${app.pid}, '${safeName}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[11px] font-medium transition-colors cursor-pointer shrink-0" title="Açık Sunucu Portları ve Dinlenen Soketleri İncele">
-                <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
-                </svg>
-                <span>Portları İncele</span>
+                <span class="text-muted-foreground text-[10px]">[PID: ${app.pid}]</span>
+                <span class="text-[9px] px-1 rounded bg-primary/10 text-primary opacity-80 group-hover:opacity-100 transition-opacity">Ağ ↗</span>
               </button>
             </div>
             <div class="flex items-center justify-between text-[10px] text-muted-foreground font-mono bg-muted/30 px-2 py-1 rounded">
@@ -1841,12 +1836,8 @@
               <select id="sel-app-${app.pid}" class="flex-1 px-2 py-1 rounded bg-background border border-input text-[11px] text-foreground focus:outline-hidden">
                 ${accOptions}
               </select>
-              <button onclick="quickAssignAccountFromCard(${app.pid})" class="px-2.5 py-1 rounded bg-primary text-primary-foreground text-[11px] font-medium hover:opacity-90 shrink-0 transition-opacity shadow-xs cursor-pointer" title="Bu PID'ye seçilen hesabı bağla (1 PID = 1 Kural)">
+              <button onclick="quickAssignAccountFromCard(${app.pid})" class="px-3 py-1 rounded bg-primary text-primary-foreground text-[11px] font-medium hover:opacity-90 shrink-0 transition-opacity shadow-xs cursor-pointer" title="Bu PID'ye seçilen hesabı bağla (1 PID = 1 Kural)">
                 Ata ➔
-              </button>
-              <button onclick="inspectProcessNetwork(${app.pid}, '${safeName}')" class="inline-flex items-center gap-1 px-2 py-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border shrink-0 text-[11px] cursor-pointer" title="Ağ ve Portları İncele">
-                <svg class="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-                <span>Ağ Detay</span>
               </button>
             </div>
           `;
