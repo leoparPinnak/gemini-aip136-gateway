@@ -140,6 +140,7 @@ func (a *AuthManager) refreshOAuthToken(refreshToken string) (string, error) {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", OfficialAntigravityUserAgent)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)

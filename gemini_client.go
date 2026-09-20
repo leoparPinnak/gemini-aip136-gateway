@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -107,9 +108,14 @@ func (c *GeminiClient) StreamGenerateContentWithAccount(
 
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "antigravity/cli/1.2.2 (aidev_client; os_type=windows; arch=amd64; cl=980147163; auth_method=consumer)")
+	req.Header.Set("User-Agent", OfficialAntigravityUserAgent)
 	req.Header.Set("X-Goog-Api-Client", "google-cloud-code")
 	req.Header.Set("Accept", "text/event-stream")
+
+	// 🛡️ Stealth Timing Layer: İnsan benzeri mikro-jitter (15ms - 45ms)
+	// İsteklerin mekanik 0ms aralıklarla değil, doğal insan/ağ varyasyonuyla gitmesini sağlar
+	jitterMs := 15 + rand.Intn(31)
+	time.Sleep(time.Duration(jitterMs) * time.Millisecond)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

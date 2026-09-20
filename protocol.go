@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -584,6 +585,32 @@ type ProtocolContext struct {
 	Account     string
 }
 
+const OfficialAntigravityUserAgent = "antigravity/cli/1.2.7 (aidev_client; os_type=windows; arch=amd64; cl=980147163; auth_method=consumer)"
+
+var (
+	stealthSessionMutex sync.Mutex
+	stealthSessionMap   = make(map[int]string)
+)
+
+// getStealthSessionID, istemci süreci (PID) için tutarlı ancak hesaplar arasında çakışmayan gerçekçi
+// 64-bitlik negatif bir int64 oturum kimliği üretir (Google telemetri korelasyonunu engeller).
+func getStealthSessionID(pid int, customSessionID string) string {
+	if customSessionID != "" {
+		return customSessionID
+	}
+	if pid > 0 {
+		stealthSessionMutex.Lock()
+		defer stealthSessionMutex.Unlock()
+		if sID, ok := stealthSessionMap[pid]; ok && sID != "" {
+			return sID
+		}
+		newSID := fmt.Sprintf("-%d", 1000000000000000000+rand.Int63n(8000000000000000000))
+		stealthSessionMap[pid] = newSID
+		return newSID
+	}
+	return fmt.Sprintf("-%d", 1000000000000000000+rand.Int63n(8000000000000000000))
+}
+
 // ConvertOpenAiRequestToGemini processes OpenAI JSON request into Google AIP-136 format
 func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ...ProtocolContext) (*GeminiAipPayload, bool, string, int, error) {
 	var body map[string]interface{}
@@ -1139,10 +1166,11 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 		}
 	}
 
-	sessionID := customSessionID
-	if sessionID == "" {
-		sessionID = "-3750763034362895579"
+	pid := 0
+	if len(ctx) > 0 {
+		pid = ctx[0].PID
 	}
+	sessionID := getStealthSessionID(pid, customSessionID)
 
 	temp := 0.7
 	if t, ok := body["temperature"].(float64); ok {
@@ -1173,7 +1201,7 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 	}
 
 	randSuffix := fmt.Sprintf("%06x", rand.Intn(0xffffff))
-	reqID := fmt.Sprintf("agent/dsh-%d-%s/1", time.Now().UnixMilli(), randSuffix)
+	reqID := fmt.Sprintf("agent/antigravity-%d-%s/1", time.Now().UnixMilli(), randSuffix)
 
 	aipPayload := &GeminiAipPayload{
 		Project:     "aicode-consumers",

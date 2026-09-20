@@ -414,6 +414,7 @@ func (s *AccountStore) RefreshAccountToken(acc *Account) (string, error) {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", OfficialAntigravityUserAgent)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
@@ -482,7 +483,7 @@ func (s *AccountStore) RefreshAccountQuota(id string) (*AccountQuota, error) {
 
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "antigravity/cli/1.2.2 (aidev_client; os_type=windows; arch=amd64; cl=980147163; auth_method=consumer)")
+	req.Header.Set("User-Agent", OfficialAntigravityUserAgent)
 	req.Header.Set("X-Goog-Api-Client", "google-cloud-code")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -772,7 +773,7 @@ func (s *AccountStore) ExchangeOAuthCode(codeOrURL, state string) (*Account, err
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", "Go-http-client/1.1")
+	req.Header.Set("User-Agent", OfficialAntigravityUserAgent)
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
@@ -928,6 +929,7 @@ func fetchUserInfoDirect(accessToken string) (*GoogleUserInfo, error) {
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("User-Agent", OfficialAntigravityUserAgent)
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
