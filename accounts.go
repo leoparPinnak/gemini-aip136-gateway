@@ -62,6 +62,7 @@ type Account struct {
 	PlanType     string             `json:"plan_type"` // "PRO"
 	Quota        *AccountQuota      `json:"quota,omitempty"`
 	TokenUsage   *AccountTokenUsage `json:"token_usage,omitempty"`
+	ProxyID      string             `json:"proxy_id,omitempty"`
 	LastChecked  int64              `json:"last_checked"`
 }
 
@@ -318,6 +319,23 @@ func (s *AccountStore) ImportCurrentWindowsAccount() (*Account, error) {
 	return acc, nil
 }
 
+func (s *AccountStore) SetAccountProxy(accountID, proxyID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, a := range s.Accounts {
+		if a.ID == accountID {
+			a.ProxyID = proxyID
+			if err := s.saveLocked(); err != nil {
+				return err
+			}
+			BroadcastAccountChange()
+			return nil
+		}
+	}
+	return fmt.Errorf("hesap bulunamadı: %s", accountID)
+}
+
 func (s *AccountStore) DeleteAccount(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -416,7 +434,12 @@ func (s *AccountStore) RefreshAccountToken(acc *Account) (string, error) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", OfficialAntigravityUserAgent)
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	var client *http.Client
+	if acc != nil && acc.ProxyID != "" && GlobalProxyManager != nil {
+		client = GlobalProxyManager.GetHttpClientForProxy(acc.ProxyID, 15*time.Second)
+	} else {
+		client = &http.Client{Timeout: 15 * time.Second}
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
@@ -486,7 +509,12 @@ func (s *AccountStore) RefreshAccountQuota(id string) (*AccountQuota, error) {
 	req.Header.Set("User-Agent", OfficialAntigravityUserAgent)
 	req.Header.Set("X-Goog-Api-Client", "google-cloud-code")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	var client *http.Client
+	if acc != nil && acc.ProxyID != "" && GlobalProxyManager != nil {
+		client = GlobalProxyManager.GetHttpClientForProxy(acc.ProxyID, 15*time.Second)
+	} else {
+		client = &http.Client{Timeout: 15 * time.Second}
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

@@ -12,6 +12,7 @@ oauth_sessions.json
 override_settings.json
 program_rules.json
 thought_signatures.json
+proxies.json
 
 # OS generated files
 Thumbs.db

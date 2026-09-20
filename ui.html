@@ -571,6 +571,12 @@
             </svg>
             <span>Override Ayarları</span>
           </a>
+          <a href="#sectionProxies" class="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
+            <svg class="size-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+            </svg>
+            <span>Proxy & IP İzolasyonu</span>
+          </a>
           <a href="#sectionInspector" class="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
             <svg class="size-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
@@ -950,6 +956,49 @@
             </section>
 
           </div>
+
+
+          <!-- ========================================================= -->
+          <!-- C) PROXY YÖNETİMİ & IP İZOLASYON MERKEZİ (SOCKS5/HTTP)     -->
+          <!-- ========================================================= -->
+          <section id="sectionProxies" class="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-xs">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-border pb-4">
+              <div class="flex flex-col gap-0.5">
+                <div class="flex items-center gap-2">
+                  <h2 class="text-base font-semibold text-foreground">🛡️ Proxy Yönetimi & IP İzolasyonu (Anti-Detection Hub)</h2>
+                  <span id="proxiesCountBadge" class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-mono font-medium text-emerald-400 border border-emerald-500/20">0 Proxy</span>
+                </div>
+                <p class="text-xs text-muted-foreground">SOCKS5 veya HTTP proxy ekleyin. Sistem otomatik ülkeyi, bayrağı ve gecikmeyi test eder; hesap kartlarından seçerek Google isteklerini o IP üzerinden çıkartabilirsiniz.</p>
+              </div>
+
+              <div class="flex items-center gap-2 shrink-0">
+                <button onclick="testAllProxies()" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-secondary text-secondary-foreground hover:bg-accent border border-border transition-all flex items-center gap-1.5 cursor-pointer shadow-xs" title="Tüm Proxyleri Yeniden Test Et">
+                  <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
+                  <span>Tümünü Test Et</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Proxy Ekleme Giriş Alanı -->
+            <div class="p-3.5 rounded-xl bg-background/80 border border-border/80 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+              <div class="relative flex-1">
+                <div class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none text-xs font-mono">
+                  🔌
+                </div>
+                <input type="text" id="inpNewProxyURL" placeholder="socks5://U3Ga4j:JMHrYE@81.177.26.246:9756 veya http://..." class="w-full pl-9 pr-3 py-2 rounded-lg bg-muted/50 border border-input text-xs font-mono text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+              </div>
+              <button id="btnAddProxy" onclick="submitAddProxy()" class="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 font-medium text-xs transition-all flex items-center justify-center gap-1.5 shrink-0 shadow-xs cursor-pointer">
+                <span>+ Proxy Ekle & Test Et</span>
+              </button>
+            </div>
+
+            <!-- Proxy Listesi Grid -->
+            <div id="proxiesListContainer" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 pt-1">
+              <!-- JavaScript ile doldurulur -->
+            </div>
+          </section>
 
 
           <!-- D) PROGRAM BAZLI AKILLI HESAP YÖNLENDİRME (APP ROUTING ENGINE) -->
@@ -1596,6 +1645,7 @@
   <script>
     // State Store
     let currentAccounts = [];
+    let currentProxies = [];
     let overrideSettings = {
       override_enabled: false,
       target_model: "gemini-3.8-flash-medium",
@@ -1687,8 +1737,10 @@
     function handleWSMessage(msg) {
       if (msg.type === 'init_state') {
         currentAccounts = msg.data.accounts || [];
+        currentProxies = msg.data.proxies || [];
         overrideSettings = msg.data.settings || overrideSettings;
         renderAccounts();
+        renderProxies();
         applySettingsToUI();
         if (msg.data.recent_requests) {
           renderRecentRequests(msg.data.recent_requests);
@@ -1698,6 +1750,11 @@
         }
       } else if (msg.type === 'accounts_update') {
         currentAccounts = msg.data || [];
+        renderAccounts();
+        renderProxies();
+      } else if (msg.type === 'proxies_update') {
+        currentProxies = msg.data || [];
+        renderProxies();
         renderAccounts();
       } else if (msg.type === 'settings_update') {
         overrideSettings = msg.data || overrideSettings;
@@ -1904,6 +1961,8 @@
           } catch (e) {}
         }
 
+        const assignedProxy = currentProxies.find(p => p.id === acc.proxy_id);
+
         card.innerHTML = `
           <div class="flex flex-col gap-3">
             <div class="flex items-start justify-between gap-2">
@@ -1994,6 +2053,35 @@
                   </span>
                 </div>
               </div>
+            </div>
+
+            <!-- Proxy & IP İzolasyonu Seçici -->
+            <div class="flex flex-col gap-1.5 pt-2.5 border-t border-border/80">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-muted-foreground flex items-center gap-1 font-medium">
+                  <svg class="size-3 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                  </svg>
+                  <span>Bağlantı & IP İzolasyonu:</span>
+                </span>
+                ${assignedProxy ? `
+                  <span class="text-[10px] font-mono font-bold text-emerald-400 flex items-center gap-1">
+                    <span>${assignedProxy.flag_emoji || '🌐'}</span>
+                    <span>${assignedProxy.country_code || 'Proxy'}</span>
+                    ${assignedProxy.latency_ms > 0 ? `<span>(${assignedProxy.latency_ms}ms)</span>` : ''}
+                  </span>
+                ` : `
+                  <span class="text-[10px] font-mono text-muted-foreground">Doğrudan IP</span>
+                `}
+              </div>
+              <select onchange="assignProxyToAccount('${acc.id}', this.value)" class="w-full text-[11px] font-mono bg-muted/60 text-foreground border border-border/80 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary transition-all cursor-pointer">
+                <option value="" ${!acc.proxy_id ? 'selected' : ''}>⚡ Doğrudan Bağlantı (Yerel IP)</option>
+                ${currentProxies.map(p => `
+                  <option value="${p.id}" ${acc.proxy_id === p.id ? 'selected' : ''}>
+                    ${p.flag_emoji || '🌐'} ${p.country_name || p.host} (${p.public_ip || p.host}) - ${p.latency_ms > 0 ? p.latency_ms + 'ms' : p.status}
+                  </option>
+                `).join('')}
+              </select>
             </div>
           </div>
 
@@ -2088,6 +2176,216 @@
         currentAccounts = data.accounts || [];
         renderAccounts();
       });
+    }
+
+    // =========================================================================
+    // 3.2. Proxy Yönetimi & IP İzolasyon Motoru (SOCKS5 / HTTP Proxy Manager)
+    // =========================================================================
+    async function loadProxies() {
+      try {
+        const res = await fetch('/api/proxies');
+        if (res.ok) {
+          currentProxies = await res.json() || [];
+          renderProxies();
+          renderAccounts();
+        }
+      } catch (err) {
+        console.error("Proxyler yüklenemedi:", err);
+      }
+    }
+
+    function renderProxies() {
+      const container = document.getElementById('proxiesListContainer');
+      const countBadge = document.getElementById('proxiesCountBadge');
+      if (countBadge) {
+        countBadge.textContent = `${currentProxies.length} Proxy`;
+      }
+      if (!container) return;
+
+      if (!currentProxies || currentProxies.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full py-8 text-center text-muted-foreground flex flex-col items-center justify-center gap-2 border border-dashed border-border rounded-xl p-6 bg-muted/10">
+            <span class="text-2xl">🌐</span>
+            <span class="text-xs font-medium text-foreground">Henüz bir proxy eklenmedi.</span>
+            <span class="text-[11px] text-muted-foreground">Yukarıdaki alana <code>socks5://kullanici:sifre@ip:port</code> formatında proxy girerek Google isteklerinizi izole edebilirsiniz.</span>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = currentProxies.map(p => {
+        const isOnline = p.status === 'online';
+        const isTesting = p.status === 'testing';
+        
+        let statusPill = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-destructive/10 text-destructive border border-destructive/20"><span class="size-1.5 rounded-full bg-destructive"></span> Çevrimdışı</span>`;
+        if (isOnline) {
+          statusPill = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><span class="size-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Aktif</span>`;
+        } else if (isTesting) {
+          statusPill = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20"><span class="size-1.5 rounded-full bg-amber-400 animate-ping"></span> Test Ediliyor...</span>`;
+        }
+
+        // Bu proxy'e bağlı hesaplar
+        const associatedAccounts = currentAccounts.filter(a => a.proxy_id === p.id);
+        const accListStr = associatedAccounts.map(a => a.name || a.email).join(', ');
+
+        return `
+          <div class="flex flex-col justify-between p-4 rounded-xl border border-border bg-background/90 hover:border-muted-foreground/40 transition-all shadow-xs gap-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <div class="size-9 rounded-lg bg-muted flex items-center justify-center text-xl shrink-0 border border-border/60 shadow-2xs">
+                  ${p.flag_emoji || '🌐'}
+                </div>
+                <div class="flex flex-col min-w-0">
+                  <div class="flex items-center gap-1.5">
+                    <span class="truncate text-xs font-bold text-foreground">${p.country_name || 'Bilinmeyen Ülke'}</span>
+                    ${p.city ? `<span class="text-[10px] text-muted-foreground truncate font-normal">(${p.city})</span>` : ''}
+                  </div>
+                  <span class="truncate text-[11px] font-mono text-cyan-400" title="${p.host}">
+                    ${(p.protocol || 'SOCKS5').toUpperCase()}://${p.host}
+                  </span>
+                </div>
+              </div>
+              ${statusPill}
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 p-2 rounded-lg bg-muted/40 border border-border/50 text-[11px] font-mono">
+              <div class="flex flex-col">
+                <span class="text-[9px] uppercase tracking-wider text-muted-foreground font-sans">Çıkış IP'si</span>
+                <span class="text-foreground font-semibold truncate" title="${p.public_ip || '-'}">${p.public_ip || p.host.split(':')[0]}</span>
+              </div>
+              <div class="flex flex-col items-end">
+                <span class="text-[9px] uppercase tracking-wider text-muted-foreground font-sans">Gecikme (Ping)</span>
+                <span class="${p.latency_ms > 0 ? (p.latency_ms < 200 ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold') : 'text-muted-foreground'}">
+                  ${p.latency_ms > 0 ? p.latency_ms + ' ms' : '-'}
+                </span>
+              </div>
+            </div>
+
+            ${p.error_msg ? `
+              <div class="text-[10px] font-mono text-destructive bg-destructive/10 p-1.5 rounded border border-destructive/20 truncate" title="${p.error_msg}">
+                ⚠️ ${p.error_msg}
+              </div>
+            ` : ''}
+
+            <div class="flex items-center justify-between gap-2 pt-2 border-t border-border/60">
+              <div class="flex items-center gap-1 min-w-0 truncate text-[10px] text-muted-foreground" title="${accListStr || 'Henüz atanmadı'}">
+                <svg class="size-3 text-muted-foreground shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                </svg>
+                <span class="truncate">${associatedAccounts.length > 0 ? `<strong class="text-emerald-400">${associatedAccounts.length} Hesap</strong> Bağlı` : 'Boşta (Atanmadı)'}</span>
+              </div>
+
+              <div class="flex items-center gap-1 shrink-0">
+                <button onclick="testProxy('${p.id}', this)" class="px-2 py-1 rounded text-[11px] font-medium bg-secondary text-secondary-foreground hover:bg-accent border border-border transition-colors flex items-center gap-1 cursor-pointer" title="Yeniden Test Et">
+                  <svg class="size-3 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
+                  <span>Test</span>
+                </button>
+                <button onclick="deleteProxy('${p.id}')" class="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer" title="Proxy'yi Sil">
+                  <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function submitAddProxy() {
+      const input = document.getElementById('inpNewProxyURL');
+      const url = input.value.trim();
+      if (!url) {
+        alert('Lütfen geçerli bir proxy adresi girin (örn: socks5://user:pass@host:port)');
+        return;
+      }
+      const btn = document.getElementById('btnAddProxy');
+      btn.disabled = true;
+      btn.textContent = 'Ekleniyor & Test Ediliyor...';
+      try {
+        const res = await fetch('/api/proxies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: url })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          input.value = '';
+          loadProxies();
+        } else {
+          alert('Proxy Eklenemedi: ' + (data.error || 'Bilinmeyen hata'));
+        }
+      } catch (err) {
+        alert('Ağ hatası: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '+ Proxy Ekle & Test Et';
+      }
+    }
+
+    async function testProxy(id, btn) {
+      const svg = btn ? btn.querySelector('svg') : null;
+      if (svg) svg.classList.add('animate-spin');
+      try {
+        const res = await fetch('/api/proxies/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: id })
+        });
+        const data = await res.json();
+        loadProxies();
+      } catch (err) {
+        console.error('Test hatası:', err);
+      } finally {
+        if (svg) svg.classList.remove('animate-spin');
+      }
+    }
+
+    async function testAllProxies() {
+      try {
+        await fetch('/api/proxies/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: 'all' })
+        });
+      } catch (err) {}
+    }
+
+    async function deleteProxy(id) {
+      if (!confirm('Bu proxy kaydını kaldırmak istediğinize emin misiniz?')) return;
+      try {
+        const res = await fetch('/api/proxies/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: id })
+        });
+        if (res.ok) {
+          loadProxies();
+          loadAccounts();
+        }
+      } catch (err) {
+        alert('Silinemedi: ' + err.message);
+      }
+    }
+
+    async function assignProxyToAccount(accId, proxyId) {
+      try {
+        const res = await fetch('/api/accounts/set-proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account_id: accId, proxy_id: proxyId })
+        });
+        if (res.ok) {
+          loadAccounts();
+          loadProxies();
+        } else {
+          alert('Proxy atanamadı');
+        }
+      } catch (err) {
+        alert('Bağlantı hatası: ' + err.message);
+      }
     }
 
     // =========================================================================
@@ -3871,6 +4169,7 @@
       initMetalRingAnimations();
       loadAutoSwitchConfig();
       loadAccounts();
+      loadProxies();
       loadProgramRules();
       loadDetectedPrograms();
       fetch('/api/settings').then(res => res.json()).then(data => {

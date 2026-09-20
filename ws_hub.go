@@ -182,10 +182,15 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[WebSocket] Yeni UI istemcisi bağlandı: %s", conn.RemoteAddr().String())
 
 	// İlk bağlantıda anlık sistem durumunu gönder
+	var proxiesList []*ProxyConfig
+	if GlobalProxyManager != nil {
+		proxiesList = GlobalProxyManager.GetAll()
+	}
 	initialState := map[string]interface{}{
 		"type": "init_state",
 		"data": map[string]interface{}{
 			"accounts":        GlobalAccountStore.GetAllAccounts(),
+			"proxies":         proxiesList,
 			"settings":        GlobalSettingsManager.Get(),
 			"recent_requests": GlobalWSHub.GetRecentRequests(),
 			"diagnostic_logs": GlobalDiagnosticLogger.GetAll(),
@@ -209,8 +214,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		buf := make([]byte, 1024)
 		for {
-			_ = conn.SetReadDeadline(time.Now().Add(120 * time.Second))
-			_, err := conn.Read(buf)
+			_, err := bufrw.Read(buf)
 			if err != nil {
 				break
 			}
@@ -226,11 +230,11 @@ func handleSSEEvents(w http.ResponseWriter, r *http.Request) {
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
 		return
 	}
 
-	ch := make(chan []byte, 10)
+	ch := make(chan []byte, 32)
 	GlobalWSHub.mu.Lock()
 	GlobalWSHub.sseClients[ch] = true
 	GlobalWSHub.mu.Unlock()
@@ -243,10 +247,15 @@ func handleSSEEvents(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// İlk durum
+	var sseProxiesList []*ProxyConfig
+	if GlobalProxyManager != nil {
+		sseProxiesList = GlobalProxyManager.GetAll()
+	}
 	initialState := map[string]interface{}{
 		"type": "init_state",
 		"data": map[string]interface{}{
 			"accounts":        GlobalAccountStore.GetAllAccounts(),
+			"proxies":         sseProxiesList,
 			"settings":        GlobalSettingsManager.Get(),
 			"recent_requests": GlobalWSHub.GetRecentRequests(),
 			"diagnostic_logs": GlobalDiagnosticLogger.GetAll(),
@@ -275,6 +284,14 @@ func BroadcastAccountChange() {
 	go func() {
 		if GlobalAccountStore != nil && GlobalWSHub != nil {
 			GlobalWSHub.Broadcast("accounts_update", GlobalAccountStore.GetAllAccounts())
+		}
+	}()
+}
+
+func BroadcastProxyChange() {
+	go func() {
+		if GlobalProxyManager != nil && GlobalWSHub != nil {
+			GlobalWSHub.Broadcast("proxies_update", GlobalProxyManager.GetAll())
 		}
 	}()
 }

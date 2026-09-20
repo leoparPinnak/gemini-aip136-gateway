@@ -274,9 +274,99 @@ func handleAccountsAPI(w http.ResponseWriter, r *http.Request) {
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "message": "Tüm kotalar yenileniyor"})
 			return
 		}
+
+		if path == "set-proxy" {
+			var body struct {
+				AccountID string `json:"account_id"`
+				ProxyID   string `json:"proxy_id"`
+			}
+			_ = json.Unmarshal(bodyBytes, &body)
+			if err := GlobalAccountStore.SetAccountProxy(body.AccountID, body.ProxyID); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "account_id": body.AccountID, "proxy_id": body.ProxyID})
+			return
+		}
 	}
 
 	http.Error(w, "Not found", http.StatusNotFound)
+}
+
+func handleProxiesAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/proxies")
+	path = strings.TrimPrefix(path, "/")
+
+	if r.Method == http.MethodGet {
+		var list []*ProxyConfig
+		if GlobalProxyManager != nil {
+			list = GlobalProxyManager.GetAll()
+		}
+		_ = json.NewEncoder(w).Encode(list)
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		bodyBytes, _ := io.ReadAll(r.Body)
+
+		if path == "test" {
+			var body struct {
+				ID string `json:"id"`
+			}
+			_ = json.Unmarshal(bodyBytes, &body)
+			if body.ID == "" || body.ID == "all" {
+				go GlobalProxyManager.TestAll()
+				_ = json.NewEncoder(w).Encode(map[string]string{"status": "testing_all"})
+				return
+			}
+			p, err := GlobalProxyManager.TestProxy(body.ID)
+			if err != nil {
+				w.WriteHeader(http.StatusBadGateway)
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "error", "error": err.Error(), "proxy": p})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "proxy": p})
+			return
+		}
+
+		if path == "delete" {
+			var body struct {
+				ID string `json:"id"`
+			}
+			_ = json.Unmarshal(bodyBytes, &body)
+			if err := GlobalProxyManager.DeleteProxy(body.ID); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+			return
+		}
+
+		// Varsayılan POST: Yeni proxy ekle
+		var body struct {
+			URL string `json:"url"`
+		}
+		if err := json.Unmarshal(bodyBytes, &body); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		p, err := GlobalProxyManager.AddProxy(body.URL)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "proxy": p})
+		return
+	}
+
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
 
 func handleSettingsAPI(w http.ResponseWriter, r *http.Request) {
@@ -839,6 +929,11 @@ func main() {
 	// 4. Program Bazlı Akıllı Hesap Yönlendiricisini Başlat
 	InitProgramRouter("program_rules.json")
 
+	// 5. Proxy & IP İzolasyon Yöneticisini Başlat
+	if _, err := InitProxyManager("."); err != nil {
+		log.Printf("[UYARI] Proxy yöneticisi başlatılamadı: %v", err)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleHealth)
 	mux.HandleFunc("/health", handleHealth)
@@ -858,6 +953,10 @@ func main() {
 	// Çoklu Hesap REST API
 	mux.HandleFunc("/api/accounts", handleAccountsAPI)
 	mux.HandleFunc("/api/accounts/", handleAccountsAPI)
+
+	// Proxy & IP İzolasyon REST API
+	mux.HandleFunc("/api/proxies", handleProxiesAPI)
+	mux.HandleFunc("/api/proxies/", handleProxiesAPI)
 
 	// Override Ayarları REST API
 	mux.HandleFunc("/api/settings", handleSettingsAPI)

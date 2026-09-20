@@ -117,7 +117,14 @@ func (c *GeminiClient) StreamGenerateContentWithAccount(
 	jitterMs := 15 + rand.Intn(31)
 	time.Sleep(time.Duration(jitterMs) * time.Millisecond)
 
-	resp, err := c.httpClient.Do(req)
+	var httpClient *http.Client
+	if acc != nil && acc.ProxyID != "" && GlobalProxyManager != nil {
+		httpClient = GlobalProxyManager.GetHttpClientForProxy(acc.ProxyID, 5*time.Minute)
+	} else {
+		httpClient = c.httpClient
+	}
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("network error: %w", err)
 	}
