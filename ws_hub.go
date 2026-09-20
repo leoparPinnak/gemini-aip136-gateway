@@ -20,6 +20,7 @@ type LiveRequestInfo struct {
 	Timestamp      string `json:"timestamp"`
 	PID            int    `json:"pid"`
 	ProcessName    string `json:"process_name"`
+	SessionID      string `json:"session_id,omitempty"`
 	Protocol       string `json:"protocol"` // "Responses API" or "Chat Completions"
 	RequestedModel string `json:"requested_model"`
 	AppliedModel   string `json:"applied_model"`

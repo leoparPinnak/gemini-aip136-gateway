@@ -611,6 +611,22 @@ func getStealthSessionID(pid int, customSessionID string) string {
 	return fmt.Sprintf("-%d", 1000000000000000000+rand.Int63n(8000000000000000000))
 }
 
+// GetStealthSessionID, istemci PID'si için kayıtlı veya yeni üretilen oturum kimliğini döner.
+func GetStealthSessionID(pid int) string {
+	return getStealthSessionID(pid, "")
+}
+
+// GetAllStealthSessionIDs, sistemdeki tüm aktif PID -> SessionID eşleşmelerini döner.
+func GetAllStealthSessionIDs() map[int]string {
+	stealthSessionMutex.Lock()
+	defer stealthSessionMutex.Unlock()
+	copyMap := make(map[int]string, len(stealthSessionMap))
+	for k, v := range stealthSessionMap {
+		copyMap[k] = v
+	}
+	return copyMap
+}
+
 // ConvertOpenAiRequestToGemini processes OpenAI JSON request into Google AIP-136 format
 func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ...ProtocolContext) (*GeminiAipPayload, bool, string, int, error) {
 	var body map[string]interface{}

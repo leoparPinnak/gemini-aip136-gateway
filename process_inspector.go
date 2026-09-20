@@ -42,6 +42,7 @@ type ProcessDetail struct {
 	FirstSeen    time.Time `json:"first_seen"`
 	LastSeen     time.Time `json:"last_seen"`
 	RequestCount int       `json:"request_count"`
+	SessionID    string    `json:"session_id,omitempty"`
 }
 
 type ProcessInspector struct {
@@ -326,7 +327,11 @@ func (pi *ProcessInspector) GetDetectedPrograms() []ProcessDetail {
 
 	list := make([]ProcessDetail, 0, len(pi.detected))
 	for _, d := range pi.detected {
-		list = append(list, *d)
+		item := *d
+		if item.PID > 0 {
+			item.SessionID = GetStealthSessionID(item.PID)
+		}
+		list = append(list, item)
 	}
 
 	// İLK GİREN EN BAŞTA DURSUN (FirstSeen ascending: eski olan en başta kalır, yer değiştirmez)
@@ -363,6 +368,7 @@ type ProcessInspectReport struct {
 	PID           int                       `json:"pid"`
 	ProcessName   string                    `json:"process_name"`
 	Executable    string                    `json:"executable,omitempty"`
+	SessionID     string                    `json:"session_id,omitempty"`
 	HasServerPort bool                      `json:"has_server_port"`
 	ServerPorts   []string                  `json:"server_ports"`
 	Connections   []ProcessSocketConnection `json:"connections"`
@@ -373,6 +379,7 @@ type ProcessInspectReport struct {
 func InspectPIDNetwork(pid int) (*ProcessInspectReport, error) {
 	report := &ProcessInspectReport{
 		PID:         pid,
+		SessionID:   GetStealthSessionID(pid),
 		ServerPorts: make([]string, 0),
 		Connections: make([]ProcessSocketConnection, 0),
 	}
