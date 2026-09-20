@@ -30,19 +30,30 @@ type StreamTranslator struct {
 	outputTokens   int
 	cachedTokens   int
 	totalTokens    int
+	pid            int
+	processName    string
 	mu             sync.Mutex
 }
 
-func NewStreamTranslator(w http.ResponseWriter, isResponsesAPI bool, modelName string) *StreamTranslator {
+func NewStreamTranslator(w http.ResponseWriter, isResponsesAPI bool, modelName string, ctx ...ProtocolContext) *StreamTranslator {
 	flusher, _ := w.(http.Flusher)
 	randSuffix := fmt.Sprintf("%06x", rand.Intn(0xffffff))
 	timestamp := time.Now().UnixMilli()
+
+	pid := 0
+	procName := "İstemci"
+	if len(ctx) > 0 {
+		pid = ctx[0].PID
+		procName = ctx[0].ProcessName
+	}
 
 	return &StreamTranslator{
 		w:              w,
 		flusher:        flusher,
 		isResponsesAPI: isResponsesAPI,
 		modelName:      modelName,
+		pid:            pid,
+		processName:    procName,
 		responseID:     fmt.Sprintf("resp_%d_%s", timestamp, randSuffix),
 		outputItemID:   fmt.Sprintf("msg_%d_%s", timestamp, randSuffix),
 		callItemID:     fmt.Sprintf("fc_%d_%s", timestamp, randSuffix),
@@ -223,6 +234,20 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 			}
 			if part.ThoughtSignature != "" {
 				GlobalThoughtStore.Store(callID, fn.Name, part.ThoughtSignature)
+				GlobalDiagnosticLogger.LogFeedback(
+					st.pid,
+					st.processName,
+					"",
+					st.modelName,
+					"Kriptografik İmza Depolandı",
+					fmt.Sprintf("Google CloudCode tarafından '%s' aracı için üretilen %d baytlık geçerli düşünce imzası yakalandı ve diske yazıldı.", fn.Name, len(part.ThoughtSignature)),
+					map[string]interface{}{
+						"tool_name":     fn.Name,
+						"call_id":       callID,
+						"signature_len": len(part.ThoughtSignature),
+						"disk_file":     "thought_signatures.json",
+					},
+				)
 			}
 
 			argsBytes, _ := json.Marshal(fn.Args)

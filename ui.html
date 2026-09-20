@@ -378,6 +378,130 @@
       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
       flex-shrink: 0;
     }
+    /* ========================================== */
+    /* BORDER BEAM & THINKING ORB & LOG CONSOLE  */
+    /* ========================================== */
+    @keyframes border-beam-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .border-beam-box {
+      position: relative;
+      border-radius: 0.85rem;
+      padding: 1.5px;
+      overflow: hidden;
+      background: transparent;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .border-beam-box::before {
+      content: '';
+      position: absolute;
+      top: -100%;
+      left: -100%;
+      width: 300%;
+      height: 300%;
+      background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        transparent 280deg,
+        #f43f5e 300deg,
+        #fb923c 325deg,
+        #f59e0b 345deg,
+        #38bdf8 355deg,
+        #a855f7 360deg
+      );
+      animation: border-beam-spin 2.4s linear infinite;
+      z-index: 0;
+    }
+    .border-beam-box.variant-error::before {
+      background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        transparent 280deg,
+        #f43f5e 310deg,
+        #e11d48 335deg,
+        #ff2e63 350deg,
+        #fda4af 360deg
+      );
+      animation: border-beam-spin 1.8s linear infinite;
+    }
+    .border-beam-box.variant-rescue::before {
+      background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        transparent 280deg,
+        #10b981 310deg,
+        #06b6d4 335deg,
+        #34d399 350deg,
+        #a7f3d0 360deg
+      );
+      animation: border-beam-spin 2.2s linear infinite;
+    }
+    .border-beam-box.variant-idle::before {
+      background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        transparent 310deg,
+        rgba(96, 165, 250, 0.4) 330deg,
+        rgba(168, 85, 247, 0.6) 350deg,
+        rgba(255, 255, 255, 0.8) 360deg
+      );
+      animation: border-beam-spin 4s linear infinite;
+    }
+    .glass-log-console {
+      position: relative;
+      z-index: 1;
+      background: rgba(18, 18, 22, 0.95);
+      backdrop-filter: blur(18px);
+      border-radius: calc(0.85rem - 1.5px);
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+    }
+    .thinking-orb {
+      position: relative;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+    .thinking-orb.working {
+      color: #f59e0b;
+      background: radial-gradient(circle at 35% 35%, #fef3c7 0%, #f59e0b 50%, #b45309 100%);
+      box-shadow: 0 0 14px rgba(245, 158, 11, 0.8);
+      animation: orb-pulse 1.6s ease-in-out infinite alternate;
+    }
+    .thinking-orb.rescue {
+      color: #10b981;
+      background: radial-gradient(circle at 35% 35%, #a7f3d0 0%, #10b981 50%, #047857 100%);
+      box-shadow: 0 0 16px rgba(16, 185, 129, 0.85);
+      animation: orb-pulse 1.3s ease-in-out infinite alternate;
+    }
+    .thinking-orb.error {
+      color: #f43f5e;
+      background: radial-gradient(circle at 35% 35%, #fecdd3 0%, #f43f5e 50%, #9f1239 100%);
+      box-shadow: 0 0 18px rgba(244, 63, 94, 0.9);
+      animation: orb-alert 0.7s ease-in-out infinite alternate;
+    }
+    .thinking-orb.idle {
+      color: #60a5fa;
+      background: radial-gradient(circle at 35% 35%, #dbeafe 0%, #3b82f6 50%, #1e40af 100%);
+      box-shadow: 0 0 8px rgba(96, 165, 250, 0.5);
+      animation: orb-pulse 3.5s ease-in-out infinite alternate;
+    }
+    @keyframes orb-pulse {
+      0% { transform: scale(0.92); filter: drop-shadow(0 0 4px currentColor); }
+      100% { transform: scale(1.08); filter: drop-shadow(0 0 14px currentColor); }
+    }
+    @keyframes orb-alert {
+      0% { transform: scale(0.86); filter: drop-shadow(0 0 6px currentColor); }
+      100% { transform: scale(1.18); filter: drop-shadow(0 0 20px currentColor); }
+    }
   </style>
 </head>
 <body class="min-h-screen bg-background text-foreground antialiased selection:bg-primary selection:text-primary-foreground">
@@ -420,6 +544,16 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
             </svg>
             <span>Test Playground</span>
+          </button>
+
+          <button id="navLogsBtn" onclick="switchNav('logs')" class="flex items-center justify-between w-full px-3 py-2 rounded-md text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors">
+            <div class="flex items-center gap-3">
+              <svg class="size-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+              <span>Teşhis & Olay Günlüğü</span>
+            </div>
+            <span id="navLogsBadge" class="hidden text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-destructive text-white font-mono">0</span>
           </button>
         </nav>
 
@@ -542,6 +676,42 @@
       <main class="flex-1 p-4 md:p-6 max-w-7xl w-full mx-auto flex flex-col gap-6">
 
         <!-- ======================================== -->
+        <!-- CANLI BİLDİRİM KONSOLU & SONAR RADAR      -->
+        <!-- ======================================== -->
+        <div id="globalNotificationBanner" class="border-beam-box variant-idle">
+          <div class="glass-log-console px-4 py-3 sm:py-3.5 border border-white/5">
+            <!-- WebGL Sonar Pulse Canvas & Thinking Orb -->
+            <div class="relative size-10 shrink-0 rounded-xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center shadow-inner">
+              <canvas id="sonarPulseCanvas" class="absolute inset-0 size-full"></canvas>
+              <div id="globalThinkingOrb" class="thinking-orb idle relative z-10"></div>
+            </div>
+
+            <!-- Bildirim İçeriği: Seviye, Kaynak PID/Uygulama, Mesaj -->
+            <div class="flex flex-col min-w-0 flex-1 gap-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span id="notifBadgeLevel" class="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-blue-500/10 text-blue-400 border-blue-500/20">SİSTEM HAZIR</span>
+                <span id="notifBadgeSource" class="text-[10px] font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border/50">PID: 8000 (Gateway)</span>
+                <span id="notifTimestamp" class="text-[10px] font-mono text-muted-foreground ml-auto">Canlı Dinleme</span>
+              </div>
+              <div id="notifMessage" class="text-xs sm:text-sm font-medium text-foreground truncate">
+                Gemini AIP-136 Protokol Gateway aktif. HTTP istekleri, düşünce imzaları ve kurtarma mekanizmaları canlı izleniyor.
+              </div>
+            </div>
+
+            <!-- Aksiyon Butonları -->
+            <div class="flex items-center gap-2 shrink-0">
+              <button onclick="switchNav('logs')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-secondary text-secondary-foreground hover:bg-accent border border-border transition-all flex items-center gap-1.5 cursor-pointer shadow-xs">
+                <span>Konsol</span>
+                <span id="notifErrorCounter" class="hidden px-1.5 py-0.5 rounded-full text-[10px] bg-destructive text-white font-mono font-bold">0</span>
+              </button>
+              <button onclick="dismissNotification()" class="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer" title="Bildirimi Gizle">
+                <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ======================================== -->
         <!-- VIEW A: ANA DASHBOARD                   -->
         <!-- ======================================== -->
         <div id="viewDashboard" class="flex flex-col gap-6">
@@ -565,8 +735,8 @@
                 </div>
               </div>
               <div class="text-[11px] text-muted-foreground border-t border-border pt-2 flex items-center justify-between">
-                <span>Plan:</span>
-                <span class="metal-text-chromatic font-bold text-xs" id="metricUserPlan">Google One AI Pro</span>
+                <span>Tüketilen Token:</span>
+                <span class="font-mono font-bold text-cyan-400 text-xs" id="metricUserTokens">0 Token</span>
               </div>
             </div>
 
@@ -580,9 +750,15 @@
               <div class="w-full bg-muted rounded-full h-1.5 overflow-hidden">
                 <div id="m5hBar" class="bg-primary h-1.5 rounded-full transition-all duration-300" style="width: 85.4%;"></div>
               </div>
-              <div class="text-[11px] text-muted-foreground flex items-center justify-between">
-                <span>Sıfırlanma:</span>
-                <span id="m5hReset" class="font-mono truncate max-w-[140px]">4h 28m kaldı</span>
+              <div class="text-[11px] text-muted-foreground flex flex-col gap-0.5">
+                <div class="flex items-center justify-between">
+                  <span>Yenilenme Saati:</span>
+                  <span id="m5hTime" class="font-mono font-medium text-foreground">-</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span>Kalan Süre:</span>
+                  <span id="m5hReset" class="font-mono text-cyan-400 font-semibold truncate">-</span>
+                </div>
               </div>
             </div>
 
@@ -597,8 +773,11 @@
                 <div id="mWeekBar" class="bg-primary h-1.5 rounded-full transition-all duration-300" style="width: 97.5%;"></div>
               </div>
               <div class="text-[11px] text-muted-foreground flex items-center justify-between">
-                <span>Kota Durumu:</span>
-                <span id="mWeekStatus" class="text-emerald-400 font-medium">Mükemmel</span>
+                <span class="flex items-center gap-1">
+                  <span>Yenilenme:</span>
+                  <strong id="mWeekTime" class="text-foreground font-mono font-normal">-</strong>
+                </span>
+                <span id="mWeekReset" class="live-reset-countdown font-mono text-cyan-400 font-semibold truncate" data-reset-time="">-</span>
               </div>
             </div>
 
@@ -631,15 +810,65 @@
                   <h2 class="text-base font-semibold text-foreground">Google Pro Hesap Kasası</h2>
                   <p class="text-xs text-muted-foreground">Elinizdeki Pro hesaplar arasında anında geçiş yapın. Kota tükenince sıradakine geçin.</p>
                 </div>
-                <button onclick="openAddAccountModal()" class="metal-btn">
-                  <canvas class="metal-ring-canvas"></canvas>
-                  <span class="metal-btn-content">
-                    <svg class="size-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                <div class="flex items-center gap-2">
+                  <button onclick="refreshAllQuotas(this)" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-secondary text-secondary-foreground hover:bg-accent border border-border transition-all flex items-center gap-1.5 cursor-pointer shadow-xs" title="Tüm Hesap Kotalarını Google'dan Canlı Yenile">
+                    <svg class="size-3.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                     </svg>
-                    <span>+ Hesap Ekle</span>
-                  </span>
-                </button>
+                    <span>Kotaları Yenile</span>
+                  </button>
+                  <button onclick="openAddAccountModal()" class="metal-btn">
+                    <canvas class="metal-ring-canvas"></canvas>
+                    <span class="metal-btn-content">
+                      <svg class="size-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                      </svg>
+                      <span>+ Hesap Ekle</span>
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Otomatik Kota Rotasyonu / Akıllı Hesap Atlama Ayar Paneli -->
+              <div class="flex flex-col gap-2.5 p-3.5 rounded-xl bg-background/80 border border-border/80 shadow-2xs">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div class="flex items-center gap-3">
+                    <div class="size-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center shrink-0 border border-cyan-500/20">
+                      <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                      </svg>
+                    </div>
+                    <div class="flex flex-col min-w-0">
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs font-semibold text-foreground">Otomatik Limit Rotasyonu</span>
+                        <span id="autoSwitchStatusBadge" class="text-[10px] font-mono px-1.5 py-0.2 rounded border border-border text-muted-foreground">KAPALI</span>
+                      </div>
+                      <span class="text-[11px] text-muted-foreground">Mevcut hesap eşiğin altına indiğinde en yüksek kotalı hesaba geçer. Eşitlikte sırayla (Round-Robin) seçer.</span>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end shrink-0">
+                    <div class="flex items-center gap-1.5 bg-muted/60 px-2.5 py-1 rounded-lg border border-border text-xs" title="Günlük / 5 Saatlik limit yüzde kaçın altına düştüğünde diğer hesaba geçileceğini belirler">
+                      <span class="text-[11px] text-muted-foreground font-medium">Eşik:</span>
+                      <span class="text-xs font-mono font-bold text-foreground">%</span>
+                      <input type="number" id="inpAutoSwitchThreshold" min="1" max="99" value="20" class="w-9 bg-transparent text-xs font-mono font-bold text-cyan-400 text-center outline-none border-b border-cyan-400/40 focus:border-cyan-400">
+                    </div>
+
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="chkAutoSwitch" onchange="toggleAutoSwitchSetting()">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Canlı Bildirim Banner'ı (Geçiş Yapıldığında Görünür) -->
+                <div id="autoSwitchAlertBanner" class="hidden flex items-center justify-between gap-2 p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-xs text-emerald-300 transition-all">
+                  <div class="flex items-center gap-2 min-w-0 truncate">
+                    <span class="size-2 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
+                    <span id="autoSwitchAlertText" class="truncate font-medium"></span>
+                  </div>
+                  <button onclick="dismissAutoSwitchBanner()" class="text-muted-foreground hover:text-foreground text-xs px-1 font-bold">✕</button>
+                </div>
               </div>
 
               <!-- Hesap Kartları Listesi -->
@@ -744,13 +973,50 @@
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
               <!-- Sol Kolon: Algılanan İstemciler ve Hızlı Hesap Atama (5 Col) -->
               <div class="lg:col-span-5 flex flex-col gap-3 rounded-lg border border-border bg-muted/20 p-4">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-semibold text-foreground uppercase tracking-wider">Tespit Edilen Uygulamalar</span>
-                  <span id="detectedAppsCount" class="text-[11px] font-mono text-muted-foreground">0 Uygulama</span>
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-foreground uppercase tracking-wider">Tespit Edilen Uygulamalar</span>
+                    <span id="detectedAppsCount" class="text-[11px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border/50">0 Uygulama</span>
+                  </div>
+                  <button onclick="clearDetectedPrograms()" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border/60 transition-colors cursor-pointer" title="Tespit edilen uygulamaları temizle">
+                    <svg class="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    <span>Temizle</span>
+                  </button>
                 </div>
                 <p class="text-[11px] text-muted-foreground">Gateway'e bağlanan programlar. Açık port ve ağ soketlerini inceleyebilir, özel Google Pro hesabı atayabilirsiniz:</p>
                 
-                <div id="detectedAppsList" class="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1">
+                <!-- Arama Kutusu ve Gelişmiş Sıralama Barı -->
+                <div class="flex flex-col gap-2 pt-0.5">
+                  <div class="flex items-center gap-2">
+                    <!-- Arama Inputu -->
+                    <div class="relative flex-1">
+                      <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                      </svg>
+                      <input type="text" id="detectedAppsSearch" oninput="handleDetectedAppsFilterChange()" placeholder="İsim, PID, exe veya hesap ara..." class="w-full pl-8 pr-7 py-1 rounded-md bg-background border border-input text-xs text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary transition-colors">
+                      <button id="clearDetectedAppsSearchBtn" onclick="clearDetectedAppsSearch()" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs p-0.5 cursor-pointer leading-none" title="Aramayı temizle">
+                        ✕
+                      </button>
+                    </div>
+
+                    <!-- Gelişmiş Sıralama Dropdown -->
+                    <div class="shrink-0">
+                      <select id="detectedAppsSort" onchange="handleDetectedAppsFilterChange()" class="px-2 py-1 rounded-md bg-background border border-input text-xs text-foreground focus:outline-hidden focus:border-primary transition-colors cursor-pointer" title="Sıralama Seçeneği">
+                        <option value="first_seen_asc">🕒 İlk Tespit (İlk Giren Üstte)</option>
+                        <option value="first_seen_desc">⏱️ Son Tespit (Yeni Üstte)</option>
+                        <option value="req_desc">🔥 İstek: Çoktan Aza (Büyük → Küçük)</option>
+                        <option value="req_asc">❄️ İstek: Azdan Çoğa (Küçük → Büyük)</option>
+                        <option value="name_asc">🔤 İsim: A &rarr; Z</option>
+                        <option value="name_desc">🔡 İsim: Z &rarr; A</option>
+                        <option value="last_seen_desc">⚡ Son Aktivite</option>
+                        <option value="pid_asc">🔢 PID: Küçükten Büyüğe</option>
+                        <option value="pid_desc">🔢 PID: Büyükten Küçüğe</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="detectedAppsList" class="flex flex-col gap-2 max-h-[340px] overflow-y-auto pr-1">
                   <!-- JS ile dolar -->
                 </div>
               </div>
@@ -949,6 +1215,112 @@
 
             </div>
 
+          </div>
+
+        </div>
+
+        <!-- ======================================== -->
+        <!-- VIEW C: TEŞHİS & OLAY GÜNLÜĞÜ (LOG CONSOLE) -->
+        <!-- ======================================== -->
+        <div id="viewLogs" class="hidden flex flex-col gap-6">
+
+          <!-- Başlık ve Kontroller -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
+            <div class="flex flex-col gap-0.5">
+              <div class="flex items-center gap-2">
+                <h2 class="text-lg font-semibold text-foreground">🛡️ Teşhis & Protokol Olay Günlüğü</h2>
+                <span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-500/20">Canlı Telemetri</span>
+              </div>
+              <p class="text-xs text-muted-foreground">Yalnızca kritik olaylar: Google CloudCode HTTP 400/503/429 hataları, Düşünce İmzası Kurtarmaları (Graceful Degradation) ve kalıcı kriptografik imza telemetrisi.</p>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button onclick="clearDiagnosticLogs()" class="px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-colors flex items-center gap-1.5 cursor-pointer">
+                <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                Temizle
+              </button>
+              <button onclick="exportDiagnosticLogs('json')" class="px-3 py-1.5 rounded-md text-xs font-medium bg-secondary text-secondary-foreground hover:bg-accent border border-border transition-colors flex items-center gap-1.5 cursor-pointer">
+                <span>JSON İndir</span>
+              </button>
+              <button onclick="exportDiagnosticLogs('txt')" class="px-3 py-1.5 rounded-md text-xs font-medium bg-secondary text-secondary-foreground hover:bg-accent border border-border transition-colors flex items-center gap-1.5 cursor-pointer">
+                <span>TXT İndir</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- KPI Sayaç Kartları -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- 1. Toplam Olay -->
+            <div class="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-xs">
+              <span class="text-xs text-muted-foreground font-medium">Toplam Teşhis Olayı</span>
+              <div class="text-2xl font-bold font-mono text-foreground" id="logStatTotal">0</div>
+              <span class="text-[11px] text-muted-foreground">Bellekte son 300 olay</span>
+            </div>
+
+            <!-- 2. HTTP Hataları (Kırmızı) -->
+            <div class="flex flex-col gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-4 shadow-xs">
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-destructive font-medium">Yakalanan HTTP Hataları</span>
+                <span class="size-2 rounded-full bg-destructive animate-ping"></span>
+              </div>
+              <div class="text-2xl font-bold font-mono text-destructive" id="logStatErrors">0</div>
+              <span class="text-[11px] text-muted-foreground">Google CloudCode 400, 503, 429 vb.</span>
+            </div>
+
+            <!-- 3. Kurtarma & Geri Bildirim (Zümrüt Yeşil) -->
+            <div class="flex flex-col gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 shadow-xs">
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-emerald-400 font-medium">Kurtarma & Geri Bildirim</span>
+                <span class="size-2 rounded-full bg-emerald-400"></span>
+              </div>
+              <div class="text-2xl font-bold font-mono text-emerald-400" id="logStatRescues">0</div>
+              <span class="text-[11px] text-muted-foreground">Düşünce imzası metne dönüştürme</span>
+            </div>
+
+            <!-- 4. Diske Kaydedilen İmzalar (Mor) -->
+            <div class="flex flex-col gap-2 rounded-xl border border-violet-500/30 bg-violet-500/5 p-4 shadow-xs">
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-violet-400 font-medium">Kalıcı Kripto İmzalar</span>
+                <span class="size-2 rounded-full bg-violet-400"></span>
+              </div>
+              <div class="text-2xl font-bold font-mono text-violet-400" id="logStatSignatures">0</div>
+              <span class="text-[11px] text-muted-foreground">thought_signatures.json</span>
+            </div>
+          </div>
+
+          <!-- Filtreleme ve Arama Çubuğu -->
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 rounded-xl border border-border bg-card">
+            <!-- Kategori Butonları -->
+            <div class="flex items-center gap-1.5 flex-wrap" id="logCategoryFilterGroup">
+              <button onclick="setLogCategoryFilter('all')" data-cat="all" class="log-cat-btn px-2.5 py-1 rounded-md text-xs font-semibold bg-primary text-primary-foreground transition-all cursor-pointer">
+                Tümü
+              </button>
+              <button onclick="setLogCategoryFilter('error')" data-cat="error" class="log-cat-btn px-2.5 py-1 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-all cursor-pointer">
+                🔴 HTTP Hataları (<span id="catErrCount">0</span>)
+              </button>
+              <button onclick="setLogCategoryFilter('rescue')" data-cat="rescue" class="log-cat-btn px-2.5 py-1 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-all cursor-pointer">
+                🟢 Kurtarma & Geri Bildirim (<span id="catRescueCount">0</span>)
+              </button>
+              <button onclick="setLogCategoryFilter('feedback')" data-cat="feedback" class="log-cat-btn px-2.5 py-1 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-all cursor-pointer">
+                ✨ Kripto İmzalar
+              </button>
+            </div>
+
+            <!-- Arama Kutusu ve PID Filtresi -->
+            <div class="flex items-center gap-2">
+              <div class="relative">
+                <input type="text" id="logSearchInput" oninput="applyLogFilters()" placeholder="Loglarda ara (PID, hata, mesaj)..." class="bg-background border border-border rounded-md pl-8 pr-3 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary w-48 sm:w-64">
+                <svg class="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              </div>
+
+              <select id="logPidFilter" onchange="applyLogFilters()" class="bg-background border border-border rounded-md px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
+                <option value="">Tüm Süreçler (PID)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Log Akış Listesi -->
+          <div id="diagnosticLogsList" class="flex flex-col gap-2.5 min-h-[400px]">
+            <!-- JavaScript ile dinamik kartlar render edilir -->
           </div>
 
         </div>
@@ -1235,20 +1607,35 @@
     // 1. Navigation Switcher
     function switchNav(viewName) {
       const isDash = viewName === 'dashboard';
+      const isPlay = viewName === 'playground';
+      const isLogs = viewName === 'logs';
+
       document.getElementById('viewDashboard').classList.toggle('hidden', !isDash);
-      document.getElementById('viewPlayground').classList.toggle('hidden', isDash);
-      
+      document.getElementById('viewPlayground').classList.toggle('hidden', !isPlay);
+      document.getElementById('viewLogs').classList.toggle('hidden', !isLogs);
+
       const btnDash = document.getElementById('navDashboardBtn');
       const btnPlay = document.getElementById('navPlaygroundBtn');
-      
+      const btnLogs = document.getElementById('navLogsBtn');
+
+      const activeClass = "flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-primary-foreground bg-primary transition-colors";
+      const inactiveClass = "flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors";
+
       if (isDash) {
-        btnDash.className = "flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-primary-foreground bg-primary transition-colors";
-        btnPlay.className = "flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors";
+        btnDash.className = activeClass;
+        btnPlay.className = inactiveClass;
+        if (btnLogs) btnLogs.className = inactiveClass;
         document.getElementById('headerBreadcrumb').textContent = "Ana Dashboard";
-      } else {
-        btnDash.className = "flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors";
-        btnPlay.className = "flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-primary-foreground bg-primary transition-colors";
+      } else if (isPlay) {
+        btnDash.className = inactiveClass;
+        btnPlay.className = activeClass;
+        if (btnLogs) btnLogs.className = inactiveClass;
         document.getElementById('headerBreadcrumb').textContent = "Test Playground";
+      } else if (isLogs) {
+        btnDash.className = inactiveClass;
+        btnPlay.className = inactiveClass;
+        if (btnLogs) btnLogs.className = activeClass;
+        document.getElementById('headerBreadcrumb').textContent = "Teşhis & Olay Günlüğü";
       }
       setTimeout(resizeMetalCanvases, 40);
     }
@@ -1306,6 +1693,9 @@
         if (msg.data.recent_requests) {
           renderRecentRequests(msg.data.recent_requests);
         }
+        if (msg.data.diagnostic_logs) {
+          initDiagnosticLogs(msg.data.diagnostic_logs);
+        }
       } else if (msg.type === 'accounts_update') {
         currentAccounts = msg.data || [];
         renderAccounts();
@@ -1315,8 +1705,92 @@
       } else if (msg.type === 'request_event') {
         prependLiveRequest(msg.data);
         loadDetectedPrograms();
+      } else if (msg.type === 'diagnostic_log') {
+        handleIncomingDiagnosticLog(msg.data);
+      } else if (msg.type === 'diagnostic_logs_cleared') {
+        clearDiagnosticLogsUI();
       }
     }
+
+    function formatTokens(num) {
+      if (!num || isNaN(num)) return '0';
+      if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+      if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+      return Number(num).toLocaleString('tr-TR');
+    }
+
+    function parseQuotaCountdown(resetTimeStr) {
+      if (!resetTimeStr || resetTimeStr === '-') {
+        return { timeStr: '-', countdownStr: '✨ Limit Hazır (100%)', isExpired: true };
+      }
+      const target = new Date(resetTimeStr).getTime();
+      if (isNaN(target)) {
+        return { timeStr: resetTimeStr, countdownStr: resetTimeStr, isExpired: false };
+      }
+      const d = new Date(target);
+      const isToday = d.toDateString() === new Date().toDateString();
+      let timeStr = '';
+      if (isToday) {
+        timeStr = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) + ' TSİ';
+      } else {
+        timeStr = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', weekday: 'short' }) + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+      }
+      
+      const now = Date.now();
+      const diff = target - now;
+      if (diff <= 0) {
+        return { timeStr: timeStr, countdownStr: '✨ Limit Yenilendi (100% Hazır)', isExpired: true };
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const s = Math.floor((diff % (1000 * 60)) / 1000);
+
+      let cd = '';
+      if (days > 0) {
+        cd = `${days}g ${h}s ${m}d`;
+      } else if (h > 0) {
+        cd = `${h}s ${m}d ${s}sn`;
+      } else {
+        cd = `${m}d ${s}sn`;
+      }
+      return { timeStr: timeStr, countdownStr: `⏳ ${cd} kaldı`, isExpired: false };
+    }
+
+    // Periyodik Canlı Geri Sayım Sayacı (Her Saniye UI'ı canlı günceller)
+    setInterval(() => {
+      document.querySelectorAll('.live-reset-countdown').forEach(el => {
+        const iso = el.getAttribute('data-reset-time');
+        if (iso) {
+          const res = parseQuotaCountdown(iso);
+          el.textContent = res.countdownStr;
+          if (res.isExpired) {
+            el.classList.remove('text-cyan-400');
+            el.classList.add('text-emerald-400');
+          } else {
+            el.classList.remove('text-emerald-400');
+            el.classList.add('text-cyan-400');
+          }
+        }
+      });
+
+      const topReset = document.getElementById('m5hReset');
+      if (topReset && topReset.getAttribute('data-reset-time')) {
+        const res = parseQuotaCountdown(topReset.getAttribute('data-reset-time'));
+        topReset.textContent = res.countdownStr;
+        const topTime = document.getElementById('m5hTime');
+        if (topTime) topTime.textContent = res.timeStr;
+      }
+
+      const topWeekReset = document.getElementById('mWeekReset');
+      if (topWeekReset && topWeekReset.getAttribute('data-reset-time')) {
+        const res = parseQuotaCountdown(topWeekReset.getAttribute('data-reset-time'));
+        topWeekReset.textContent = res.countdownStr;
+        const topWeekTime = document.getElementById('mWeekTime');
+        if (topWeekTime) topWeekTime.textContent = res.timeStr;
+      }
+    }, 1000);
 
     // 3. Render Multi-Account Vault Cards
     function renderAccounts() {
@@ -1331,7 +1805,12 @@
         document.getElementById('sideUserEmail').textContent = activeAcc.email || '-';
         document.getElementById('metricUserName').textContent = activeAcc.name || 'Pro Kullanıcı';
         document.getElementById('metricUserEmail').textContent = activeAcc.email || '-';
-        document.getElementById('metricUserPlan').textContent = activeAcc.plan_type || 'Google One AI Pro';
+        
+        const tu = activeAcc.token_usage || { total_tokens: 0, total_prompt_tokens: 0, total_candidates_tokens: 0, total_cached_tokens: 0, request_count: 0 };
+        const tokenElem = document.getElementById('metricUserTokens');
+        if (tokenElem) {
+          tokenElem.innerHTML = `<span class="text-foreground">In: ${formatTokens(tu.total_prompt_tokens)}</span> • <span class="text-foreground">Out: ${formatTokens(tu.total_candidates_tokens)}</span> • <span class="${(tu.total_cached_tokens || 0) > 0 ? 'text-amber-400 font-bold' : 'text-muted-foreground'}">Cache: ${formatTokens(tu.total_cached_tokens || 0)}</span>`;
+        }
 
         const avatarMarkup = activeAcc.picture 
           ? `<img src="${activeAcc.picture}" alt="${activeAcc.name}" class="size-full object-cover">`
@@ -1342,23 +1821,42 @@
 
         // Quota values
         let f5h = 100;
-        let f5hDesc = 'Sıfırlanma: -';
+        let f5hResetTime = '';
         if (activeAcc.quota && activeAcc.quota.gemini_5h) {
           f5h = Math.round(activeAcc.quota.gemini_5h.remaining_fraction * 100);
-          f5hDesc = activeAcc.quota.gemini_5h.description || activeAcc.quota.gemini_5h.reset_time || '-';
+          f5hResetTime = activeAcc.quota.gemini_5h.reset_time || '';
         }
         document.getElementById('m5hPercent').textContent = `%${f5h} Kalan`;
         document.getElementById('m5hLarge').textContent = `${f5h}%`;
         document.getElementById('m5hBar').style.width = `${f5h}%`;
-        document.getElementById('m5hReset').textContent = f5hDesc;
+
+        const countdownData = parseQuotaCountdown(f5hResetTime);
+        const topTime = document.getElementById('m5hTime');
+        if (topTime) topTime.textContent = countdownData.timeStr;
+        const topReset = document.getElementById('m5hReset');
+        if (topReset) {
+          topReset.setAttribute('data-reset-time', f5hResetTime);
+          topReset.textContent = countdownData.countdownStr;
+        }
 
         let fWk = 100;
+        let fWkResetTime = '';
         if (activeAcc.quota && activeAcc.quota.gemini_weekly) {
           fWk = Math.round(activeAcc.quota.gemini_weekly.remaining_fraction * 100);
+          fWkResetTime = activeAcc.quota.gemini_weekly.reset_time || '';
         }
         document.getElementById('mWeekPercent').textContent = `%${fWk} Kalan`;
         document.getElementById('mWeekLarge').textContent = `${fWk}%`;
         document.getElementById('mWeekBar').style.width = `${fWk}%`;
+
+        const cdWeekData = parseQuotaCountdown(fWkResetTime);
+        const topWeekTime = document.getElementById('mWeekTime');
+        if (topWeekTime) topWeekTime.textContent = cdWeekData.timeStr;
+        const topWeekReset = document.getElementById('mWeekReset');
+        if (topWeekReset) {
+          topWeekReset.setAttribute('data-reset-time', fWkResetTime);
+          topWeekReset.textContent = cdWeekData.countdownStr;
+        }
       }
 
       currentAccounts.forEach(acc => {
@@ -1367,20 +1865,44 @@
         card.className = `flex flex-col justify-between p-4 rounded-xl border bg-background transition-all ${isActive ? 'border-primary ring-1 ring-primary/30 shadow-xs' : 'border-border hover:border-muted-foreground/30'}`;
 
         let fiveHourVal = 100;
-        let fiveHourReset = '-';
+        let fiveHourResetTime = '';
         if (acc.quota && acc.quota.gemini_5h) {
           fiveHourVal = Math.round(acc.quota.gemini_5h.remaining_fraction * 100);
-          fiveHourReset = acc.quota.gemini_5h.description || acc.quota.gemini_5h.reset_time || '-';
+          fiveHourResetTime = acc.quota.gemini_5h.reset_time || '';
         }
 
         let weeklyVal = 100;
+        let weeklyResetTime = '';
         if (acc.quota && acc.quota.gemini_weekly) {
           weeklyVal = Math.round(acc.quota.gemini_weekly.remaining_fraction * 100);
+          weeklyResetTime = acc.quota.gemini_weekly.reset_time || '';
         }
+
+        const cdWeeklyInfo = parseQuotaCountdown(weeklyResetTime);
+
+        const tu = acc.token_usage || {
+          total_tokens: 0,
+          total_prompt_tokens: 0,
+          total_candidates_tokens: 0,
+          total_cached_tokens: 0,
+          request_count: 0,
+          last_total_tokens: 0,
+          last_active_time: ''
+        };
+
+        const cdInfo = parseQuotaCountdown(fiveHourResetTime);
 
         const avatarContent = acc.picture 
           ? `<img src="${acc.picture}" alt="${acc.name}" class="size-full object-cover">`
           : (acc.name ? acc.name.charAt(0).toUpperCase() : 'G');
+
+        let lastActiveStr = '';
+        if (tu.last_active_time) {
+          try {
+            const dt = new Date(tu.last_active_time);
+            lastActiveStr = dt.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+          } catch (e) {}
+        }
 
         card.innerHTML = `
           <div class="flex flex-col gap-3">
@@ -1405,7 +1927,35 @@
               `}
             </div>
 
-            <!-- Kota Çubukları -->
+            <!-- Anlık Token Tüketim Bloğu (usageMetadata) -->
+            <div class="flex flex-col gap-1 p-2 rounded-lg bg-muted/40 border border-border/60">
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-muted-foreground font-medium flex items-center gap-1.5">
+                  <svg class="size-3 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                  </svg>
+                  <span>Yakalanan Tüketim</span>
+                </span>
+                <span class="font-mono font-bold text-cyan-300 text-xs">${formatTokens(tu.total_tokens)} Token</span>
+              </div>
+              <div class="flex items-center justify-between text-[10px] text-muted-foreground font-mono pt-0.5">
+                <span>In: <strong class="text-foreground font-medium">${formatTokens(tu.total_prompt_tokens)}</strong></span>
+                <span>•</span>
+                <span>Out: <strong class="text-foreground font-medium">${formatTokens(tu.total_candidates_tokens)}</strong></span>
+                <span>•</span>
+                <span>Cache: <strong class="${(tu.total_cached_tokens || 0) > 0 ? 'text-amber-400 font-semibold' : 'text-muted-foreground'}">${formatTokens(tu.total_cached_tokens || 0)}</strong></span>
+                <span>•</span>
+                <span>${tu.request_count || 0} req</span>
+              </div>
+              ${tu.last_total_tokens > 0 ? `
+                <div class="flex items-center justify-between text-[9px] text-muted-foreground font-mono pt-1 border-t border-border/40 mt-0.5">
+                  <span>Son İstek: <span class="text-emerald-400 font-semibold">+${formatTokens(tu.last_total_tokens)}</span> ${tu.last_cached_tokens > 0 ? `<span class="text-amber-400 text-[8px] font-mono ml-1">(⚡${formatTokens(tu.last_cached_tokens)} cache)</span>` : ''}</span>
+                  <span>${lastActiveStr}</span>
+                </div>
+              ` : ''}
+            </div>
+
+            <!-- Kota Çubukları ve Canlı Yenilenme Saati -->
             <div class="flex flex-col gap-2 pt-1 border-t border-border">
               <div class="flex flex-col gap-1">
                 <div class="flex items-center justify-between text-[11px]">
@@ -1415,15 +1965,33 @@
                 <div class="w-full bg-muted rounded-full h-1 overflow-hidden">
                   <div class="h-1 rounded-full ${fiveHourVal < 25 ? 'bg-destructive' : 'bg-primary'}" style="width: ${fiveHourVal}%;"></div>
                 </div>
+                <div class="flex items-center justify-between text-[10px] pt-0.5">
+                  <span class="text-muted-foreground flex items-center gap-1">
+                    <span>Yenilenme:</span>
+                    <strong class="text-foreground font-mono font-normal">${cdInfo.timeStr}</strong>
+                  </span>
+                  <span class="live-reset-countdown font-mono font-semibold ${cdInfo.isExpired ? 'text-emerald-400' : 'text-cyan-400'}" data-reset-time="${fiveHourResetTime}">
+                    ${cdInfo.countdownStr}
+                  </span>
+                </div>
               </div>
 
-              <div class="flex flex-col gap-1">
+              <div class="flex flex-col gap-1 pt-1 border-t border-border/40">
                 <div class="flex items-center justify-between text-[11px]">
                   <span class="text-muted-foreground">Haftalık Limit</span>
-                  <span class="font-mono font-medium text-foreground">%${weeklyVal}</span>
+                  <span class="font-mono font-medium ${weeklyVal < 25 ? 'text-destructive' : 'text-foreground'}">%${weeklyVal}</span>
                 </div>
                 <div class="w-full bg-muted rounded-full h-1 overflow-hidden">
-                  <div class="h-1 rounded-full bg-primary" style="width: ${weeklyVal}%;"></div>
+                  <div class="h-1 rounded-full ${weeklyVal < 25 ? 'bg-destructive' : 'bg-primary'}" style="width: ${weeklyVal}%;"></div>
+                </div>
+                <div class="flex items-center justify-between text-[10px] pt-0.5">
+                  <span class="text-muted-foreground flex items-center gap-1">
+                    <span>Yenilenme:</span>
+                    <strong class="text-foreground font-mono font-normal">${cdWeeklyInfo.timeStr}</strong>
+                  </span>
+                  <span class="live-reset-countdown font-mono font-semibold ${cdWeeklyInfo.isExpired ? 'text-emerald-400' : 'text-cyan-400'}" data-reset-time="${weeklyResetTime}">
+                    ${cdWeeklyInfo.countdownStr}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1431,7 +1999,7 @@
 
           <!-- Alt Butonlar -->
           <div class="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-border">
-            <span class="text-[10px] text-muted-foreground truncate" title="${fiveHourReset}">${fiveHourReset.length > 24 ? fiveHourReset.slice(0,24)+'...' : fiveHourReset}</span>
+            <span class="text-[10px] text-muted-foreground font-mono truncate" title="${acc.id}">ID: ${acc.id}</span>
             <div class="flex items-center gap-1.5 shrink-0">
               <button onclick="refreshQuota('${acc.id}', this)" class="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Kotayı Yenile">
                 <svg class="size-3.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1450,6 +2018,26 @@
         `;
         container.appendChild(card);
       });
+
+      // Akıllı Limit Rotasyon Kontrolü
+      checkAndExecuteAutoSwitch();
+    }
+
+    async function refreshAllQuotas(btn) {
+      const svg = btn ? btn.querySelector('svg') : null;
+      if (svg) svg.classList.add('animate-spin');
+      try {
+        const res = await fetch('/api/accounts/refresh-all-quotas', { method: 'POST' });
+        if (res.ok) {
+          // Güncelleme WebSocket üzerinden canlı gelecek
+        }
+      } catch (err) {
+        console.error("Kotalar yenilenemedi:", err);
+      } finally {
+        setTimeout(() => {
+          if (svg) svg.classList.remove('animate-spin');
+        }, 1500);
+      }
     }
 
     function setActiveAccount(id) {
@@ -1501,6 +2089,198 @@
         renderAccounts();
       });
     }
+
+    // =========================================================================
+    // 3.1. Akıllı Otomatik Limit Rotasyonu (Auto-Switch Account Rotation)
+    // =========================================================================
+    let autoSwitchConfig = {
+      enabled: false,
+      threshold: 20,
+      lastSwitchTime: 0,
+      lastSwitchedFrom: '',
+      lastSwitchedTo: ''
+    };
+    let isAutoSwitching = false;
+
+    function loadAutoSwitchConfig() {
+      try {
+        const saved = localStorage.getItem('agy_auto_switch_config');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          autoSwitchConfig = { ...autoSwitchConfig, ...parsed };
+        }
+      } catch (e) {}
+
+      const chk = document.getElementById('chkAutoSwitch');
+      if (chk) chk.checked = !!autoSwitchConfig.enabled;
+
+      const inp = document.getElementById('inpAutoSwitchThreshold');
+      if (inp) {
+        inp.value = autoSwitchConfig.threshold || 20;
+        inp.onchange = () => {
+          let val = parseInt(inp.value, 10);
+          if (isNaN(val) || val < 1) val = 1;
+          if (val > 99) val = 99;
+          inp.value = val;
+          autoSwitchConfig.threshold = val;
+          saveAutoSwitchConfig();
+          if (autoSwitchConfig.enabled) {
+            checkAndExecuteAutoSwitch();
+          }
+        };
+      }
+
+      updateAutoSwitchBadge();
+    }
+
+    function saveAutoSwitchConfig() {
+      try {
+        localStorage.setItem('agy_auto_switch_config', JSON.stringify(autoSwitchConfig));
+      } catch (e) {}
+      updateAutoSwitchBadge();
+    }
+
+    function updateAutoSwitchBadge() {
+      const badge = document.getElementById('autoSwitchStatusBadge');
+      if (!badge) return;
+      if (autoSwitchConfig.enabled) {
+        badge.textContent = `AKTİF (≤ %${autoSwitchConfig.threshold})`;
+        badge.className = "text-[10px] font-mono px-1.5 py-0.2 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-semibold";
+      } else {
+        badge.textContent = "KAPALI";
+        badge.className = "text-[10px] font-mono px-1.5 py-0.2 rounded border border-border text-muted-foreground";
+      }
+    }
+
+    function toggleAutoSwitchSetting() {
+      const chk = document.getElementById('chkAutoSwitch');
+      autoSwitchConfig.enabled = chk ? chk.checked : false;
+      const inp = document.getElementById('inpAutoSwitchThreshold');
+      if (inp) {
+        const val = parseInt(inp.value, 10);
+        if (!isNaN(val) && val >= 1 && val <= 99) {
+          autoSwitchConfig.threshold = val;
+        }
+      }
+      saveAutoSwitchConfig();
+      if (autoSwitchConfig.enabled) {
+        checkAndExecuteAutoSwitch();
+      }
+    }
+
+    function checkAndExecuteAutoSwitch() {
+      if (!autoSwitchConfig.enabled || isAutoSwitching) return;
+      if (!currentAccounts || currentAccounts.length <= 1) return;
+
+      // 3 saniyelik geçiş kilidi / cooldown
+      if (Date.now() - autoSwitchConfig.lastSwitchTime < 3000) return;
+
+      const activeAcc = currentAccounts.find(a => a.is_active);
+      if (!activeAcc) return;
+
+      // Aktif hesabın 5 saatlik (günlük periyot) limit yüzdesi
+      let active5hVal = 100;
+      if (activeAcc.quota && activeAcc.quota.gemini_5h) {
+        active5hVal = Math.round(activeAcc.quota.gemini_5h.remaining_fraction * 100);
+      }
+
+      const threshold = autoSwitchConfig.threshold || 20;
+
+      // Belirlenen eşiğin altına düşmediyse geçişe gerek yok
+      if (active5hVal > threshold) return;
+
+      // Aktif hesap dışındaki diğer hesaplar
+      const otherAccounts = currentAccounts.filter(a => a.id !== activeAcc.id);
+      if (otherAccounts.length === 0) return;
+
+      // Diğer hesaplar arasındaki en yüksek 5 saatlik kotayı tespit et
+      let maxQuota = -1;
+      otherAccounts.forEach(a => {
+        let q = 100;
+        if (a.quota && a.quota.gemini_5h) {
+          q = Math.round(a.quota.gemini_5h.remaining_fraction * 100);
+        }
+        if (q > maxQuota) {
+          maxQuota = q;
+        }
+      });
+
+      // Diğer hesapların en iyisi bile mevcut hesaptan daha düşük veya eşitse geçiş yapma
+      if (maxQuota <= active5hVal) return;
+
+      // En yüksek kotayı paylaşan adaylar (örneğin 3 hesap da %100 olabilir)
+      const topCandidates = otherAccounts.filter(a => {
+        let q = 100;
+        if (a.quota && a.quota.gemini_5h) {
+          q = Math.round(a.quota.gemini_5h.remaining_fraction * 100);
+        }
+        return q === maxQuota;
+      });
+
+      // Kural: "birde eğer iki tane en yüksek varsa yada daha fazla eşit değerde mesele 3 üde %100 ozaman sıradan seç"
+      // Mevcut aktif hesabın dizideki konumundan sonraki ilk adayı dairesel (round-robin) sırayla seç
+      const activeIdx = currentAccounts.findIndex(a => a.id === activeAcc.id);
+      let selectedTarget = null;
+      for (let i = 1; i <= currentAccounts.length; i++) {
+        const checkIdx = (activeIdx + i) % currentAccounts.length;
+        const cand = currentAccounts[checkIdx];
+        if (topCandidates.some(t => t.id === cand.id)) {
+          selectedTarget = cand;
+          break;
+        }
+      }
+      if (!selectedTarget) {
+        selectedTarget = topCandidates[0];
+      }
+
+      // Geçişi gerçekleştir
+      isAutoSwitching = true;
+      autoSwitchConfig.lastSwitchTime = Date.now();
+      autoSwitchConfig.lastSwitchedFrom = activeAcc.email || activeAcc.name;
+      autoSwitchConfig.lastSwitchedTo = selectedTarget.email || selectedTarget.name;
+      saveAutoSwitchConfig();
+
+      console.log(`[AutoSwitch] Aktif hesap (%${active5hVal} <= %${threshold}) eşiğin altına indi ➔ En yüksek kotalı hesaba geçiliyor: ${selectedTarget.email} (%${maxQuota})`);
+
+      fetch('/api/accounts/active', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: selectedTarget.id })
+      }).then(res => res.json()).then(data => {
+        loadAccounts();
+        showAutoSwitchBanner(activeAcc, selectedTarget, active5hVal, maxQuota);
+      }).catch(err => {
+        console.error("[AutoSwitch] Geçiş hatası:", err);
+      }).finally(() => {
+        setTimeout(() => {
+          isAutoSwitching = false;
+        }, 1500);
+      });
+    }
+
+    function showAutoSwitchBanner(oldAcc, newAcc, oldVal, newVal) {
+      const banner = document.getElementById('autoSwitchAlertBanner');
+      const txt = document.getElementById('autoSwitchAlertText');
+      if (banner && txt) {
+        txt.innerHTML = `<strong>Otomatik Atlama:</strong> <code>${oldAcc.email || oldAcc.name}</code> (%${oldVal}) eşiğin altına indi ➔ En yüksek kotalı <code>${newAcc.email || newAcc.name}</code> (<strong>%${newVal}</strong>) aktif edildi.`;
+        banner.classList.remove('hidden');
+        setTimeout(() => {
+          dismissAutoSwitchBanner();
+        }, 10000);
+      }
+    }
+
+    function dismissAutoSwitchBanner() {
+      const banner = document.getElementById('autoSwitchAlertBanner');
+      if (banner) banner.classList.add('hidden');
+    }
+
+    // Periyodik olarak arka planda oto-geçiş kontrolü (her 5 sn)
+    setInterval(() => {
+      if (autoSwitchConfig.enabled) {
+        checkAndExecuteAutoSwitch();
+      }
+    }, 5000);
 
     // 4. Modal Functions & Google OAuth Flow
     let currentOAuthState = "";
@@ -1988,17 +2768,149 @@
       }
     }
 
+    function handleDetectedAppsFilterChange() {
+      const searchInput = document.getElementById('detectedAppsSearch');
+      const clearBtn = document.getElementById('clearDetectedAppsSearchBtn');
+      if (searchInput && clearBtn) {
+        if (searchInput.value.trim().length > 0) {
+          clearBtn.classList.remove('hidden');
+        } else {
+          clearBtn.classList.add('hidden');
+        }
+      }
+      renderDetectedAppsList();
+    }
+
+    function clearDetectedAppsSearch() {
+      const searchInput = document.getElementById('detectedAppsSearch');
+      if (searchInput) {
+        searchInput.value = '';
+        handleDetectedAppsFilterChange();
+        searchInput.focus();
+      }
+    }
+
+    async function clearDetectedPrograms() {
+      if (!currentDetectedApps || currentDetectedApps.length === 0) {
+        alert("Temizlenecek tespit edilmiş uygulama yok.");
+        return;
+      }
+      if (!confirm("Tespit edilen tüm uygulamalar listesini temizlemek istediğinize emin misiniz?")) {
+        return;
+      }
+      try {
+        await fetch('/api/detected-programs', { method: 'DELETE' });
+        currentDetectedApps = [];
+        renderDetectedAppsList();
+      } catch (e) {
+        console.error("Uygulamalar temizlenemedi:", e);
+        currentDetectedApps = [];
+        renderDetectedAppsList();
+      }
+    }
+
     function renderDetectedAppsList() {
       const container = document.getElementById('detectedAppsList');
       const countBadge = document.getElementById('detectedAppsCount');
       if (!container) return;
 
-      countBadge.textContent = `${currentDetectedApps.length} Uygulama`;
+      const searchInput = document.getElementById('detectedAppsSearch');
+      const sortSelect = document.getElementById('detectedAppsSort');
+      const query = (searchInput ? searchInput.value : '').trim().toLowerCase();
+      const sortBy = sortSelect ? sortSelect.value : 'first_seen_asc';
 
+      // 1. Filtreleme
+      let filtered = currentDetectedApps.slice();
+      if (query) {
+        filtered = filtered.filter(app => {
+          const nameMatch = (app.display_name || '').toLowerCase().includes(query);
+          const exeMatch = (app.exe_name || '').toLowerCase().includes(query);
+          const pidMatch = String(app.pid).includes(query);
+          const cmdMatch = (app.command_line || '').toLowerCase().includes(query);
+          const assignedRule = currentAppRules.find(r => r.pid === app.pid && r.enabled);
+          const accMatch = assignedRule && (
+            (assignedRule.account_name || '').toLowerCase().includes(query) ||
+            (assignedRule.account_email || '').toLowerCase().includes(query)
+          );
+          return nameMatch || exeMatch || pidMatch || cmdMatch || accMatch;
+        });
+      }
+
+      // Sayaç Güncelleme
+      if (countBadge) {
+        if (query) {
+          countBadge.textContent = `${filtered.length} / ${currentDetectedApps.length} Uygulama`;
+        } else {
+          countBadge.textContent = `${currentDetectedApps.length} Uygulama`;
+        }
+      }
+
+      // 2. Gelişmiş Sıralama
+      filtered.sort((a, b) => {
+        switch (sortBy) {
+          case 'first_seen_asc': { // Açılış / İlk tespit edilen en üstte (eskiden yeniye)
+            const tA = new Date(a.first_seen || 0).getTime();
+            const tB = new Date(b.first_seen || 0).getTime();
+            return (tA - tB) || (a.pid - b.pid);
+          }
+          case 'first_seen_desc': { // Son tespit edilen en üstte (yeniden eskiye)
+            const tA = new Date(a.first_seen || 0).getTime();
+            const tB = new Date(b.first_seen || 0).getTime();
+            return (tB - tA) || (b.pid - a.pid);
+          }
+          case 'req_desc': { // İstek sayısı büyükten küçüğe
+            const rA = a.request_count || 0;
+            const rB = b.request_count || 0;
+            return (rB - rA) || (a.pid - b.pid);
+          }
+          case 'req_asc': { // İstek sayısı küçükten büyüğe
+            const rA = a.request_count || 0;
+            const rB = b.request_count || 0;
+            return (rA - rB) || (a.pid - b.pid);
+          }
+          case 'name_asc': { // İsim A'dan Z'ye
+            const nA = a.display_name || '';
+            const nB = b.display_name || '';
+            return nA.localeCompare(nB, 'tr', { sensitivity: 'base' }) || (a.pid - b.pid);
+          }
+          case 'name_desc': { // İsim Z'den A'ya
+            const nA = a.display_name || '';
+            const nB = b.display_name || '';
+            return nB.localeCompare(nA, 'tr', { sensitivity: 'base' }) || (a.pid - b.pid);
+          }
+          case 'last_seen_desc': { // Son aktivite (en yeni en üstte)
+            const tA = new Date(a.last_seen || 0).getTime();
+            const tB = new Date(b.last_seen || 0).getTime();
+            return (tB - tA) || (b.pid - a.pid);
+          }
+          case 'pid_asc': { // PID küçükten büyüğe
+            return a.pid - b.pid;
+          }
+          case 'pid_desc': { // PID büyükten küçüğe
+            return b.pid - a.pid;
+          }
+          default:
+            return 0;
+        }
+      });
+
+      // 3. Boş Durum Kontrolleri
       if (currentDetectedApps.length === 0) {
         container.innerHTML = `
           <div class="p-4 text-center text-muted-foreground text-xs font-mono">
             Henüz algılanan harici bir program yok.<br>Gateway (Port 8000) dinlemede.
+          </div>
+        `;
+        return;
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="p-5 text-center text-muted-foreground text-xs flex flex-col items-center gap-2">
+            <span>"${query}" arama kriterine uygun uygulama bulunamadı.</span>
+            <button onclick="clearDetectedAppsSearch()" class="px-2.5 py-1 rounded bg-muted hover:bg-muted/80 text-foreground text-xs border border-border transition-colors cursor-pointer">
+              Filtreyi Temizle
+            </button>
           </div>
         `;
         return;
@@ -2010,20 +2922,20 @@
         container.innerHTML = '';
       }
 
-      const activePids = new Set(currentDetectedApps.map(a => a.pid));
+      const activeFilteredPids = new Set(filtered.map(a => a.pid));
 
-      // Mevcut olmayan eski kartları temizle
+      // Filtre dışı kalan veya artık listede olmayan kartları DOM'dan kaldır
       Array.from(container.children).forEach(child => {
         if (child.id && child.id.startsWith('app-card-')) {
           const pid = parseInt(child.id.replace('app-card-', ''));
-          if (!activePids.has(pid)) {
+          if (!activeFilteredPids.has(pid)) {
             container.removeChild(child);
           }
         }
       });
 
-      // İLK GİREN EN BAŞTA SABİT: Sıralamayı bozmadan in-place güncelle veya kart oluştur
-      currentDetectedApps.forEach(app => {
+      // Kartları oluştur veya in-place güncelle ve appendChild ile SIRALI konuma taşı
+      filtered.forEach(app => {
         let card = document.getElementById(`app-card-${app.pid}`);
         const assignedRule = currentAppRules.find(r => r.pid === app.pid && r.enabled);
         const safeName = (app.display_name || 'Program').replace(/'/g, "\\'");
@@ -2502,10 +3414,462 @@
       requestAnimationFrame(animate);
     }
 
+    // ==========================================
+    // 8.5 WEBGL SONAR PULSE & DIAGNOSTIC CONSOLE
+    // ==========================================
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // 1. WebGL Sonar Pulse Fragment Shaderı
+    let sonarGL = null;
+    let sonarProgram = null;
+    let sonarUniforms = {};
+    let sonarColor = [0.24, 0.55, 0.95]; // Default soft sky/cyan
+    let targetSonarColor = [0.24, 0.55, 0.95];
+    let sonarStartTime = performance.now();
+
+    function initSonarPulse() {
+      const canvas = document.getElementById('sonarPulseCanvas');
+      if (!canvas) return;
+      const gl = canvas.getContext('webgl', { alpha: true, antialias: true }) || canvas.getContext('experimental-webgl');
+      if (!gl) return;
+      sonarGL = gl;
+
+      const vsSource = `
+        attribute vec2 position;
+        void main() {
+          gl_Position = vec4(position, 0.0, 1.0);
+        }
+      `;
+
+      // Kullanıcının belirttiği WebGL Sonar Pulse Fragment Shaderı
+      const fsSource = `
+        precision mediump float;
+        uniform vec2 u_resolution;
+        uniform float u_time;
+        uniform vec3 u_color;
+        void main() {
+          vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / min(u_resolution.x, u_resolution.y);
+          float dist = length(uv);
+          float wave = fract(u_time * 0.75);
+          float ring = smoothstep(0.04, 0.0, abs(dist - wave * 0.46)) * (1.0 - wave);
+          float core = smoothstep(0.18, 0.12, dist);
+          gl_FragColor = vec4(u_color * (core + ring), (core + ring) * 0.95);
+        }
+      `;
+
+      function compileShader(type, src) {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        return s;
+      }
+
+      const vs = compileShader(gl.VERTEX_SHADER, vsSource);
+      const fs = compileShader(gl.FRAGMENT_SHADER, fsSource);
+      sonarProgram = gl.createProgram();
+      gl.attachShader(sonarProgram, vs);
+      gl.attachShader(sonarProgram, fs);
+      gl.linkProgram(sonarProgram);
+
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1, -1,  1, -1, -1,  1,
+        -1,  1,  1, -1,  1,  1
+      ]), gl.STATIC_DRAW);
+
+      const posAttr = gl.getAttribLocation(sonarProgram, 'position');
+      gl.enableVertexAttribArray(posAttr);
+      gl.vertexAttribPointer(posAttr, 2, gl.FLOAT, false, 0, 0);
+
+      sonarUniforms = {
+        u_resolution: gl.getUniformLocation(sonarProgram, 'u_resolution'),
+        u_time: gl.getUniformLocation(sonarProgram, 'u_time'),
+        u_color: gl.getUniformLocation(sonarProgram, 'u_color')
+      };
+
+      function renderSonar() {
+        if (!sonarGL) return;
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        const w = Math.round(rect.width * dpr) || 40;
+        const h = Math.round(rect.height * dpr) || 40;
+        if (canvas.width !== w || canvas.height !== h) {
+          canvas.width = w;
+          canvas.height = h;
+          gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+
+        // Renk geçişini yumuşat (lerp)
+        for (let i = 0; i < 3; i++) {
+          sonarColor[i] += (targetSonarColor[i] - sonarColor[i]) * 0.08;
+        }
+
+        const elapsed = (performance.now() - sonarStartTime) / 1000.0;
+        gl.useProgram(sonarProgram);
+        gl.uniform2f(sonarUniforms.u_resolution, canvas.width, canvas.height);
+        gl.uniform1f(sonarUniforms.u_time, elapsed);
+        gl.uniform3f(sonarUniforms.u_color, sonarColor[0], sonarColor[1], sonarColor[2]);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        requestAnimationFrame(renderSonar);
+      }
+      requestAnimationFrame(renderSonar);
+    }
+
+    function setSonarTargetColor(r, g, b) {
+      targetSonarColor = [r, g, b];
+    }
+
+    // 2. Diagnostic Logs Store & Notification Console
+    let diagnosticLogs = [];
+    let activeLogCategory = 'all';
+    let logErrorCount = 0;
+    let logRescueCount = 0;
+    let logSignatureCount = 0;
+
+    function initDiagnosticLogs(logs) {
+      if (Array.isArray(logs)) {
+        diagnosticLogs = logs;
+      }
+      updateDiagnosticStats();
+      populatePidFilter();
+      renderDiagnosticLogs();
+      if (diagnosticLogs.length > 0) {
+        const latest = diagnosticLogs[diagnosticLogs.length - 1];
+        showNotification(latest, false);
+      }
+    }
+
+    function handleIncomingDiagnosticLog(log) {
+      diagnosticLogs.push(log);
+      if (diagnosticLogs.length > 300) {
+        diagnosticLogs.shift();
+      }
+      updateDiagnosticStats();
+      populatePidFilter();
+      renderDiagnosticLogs();
+      showNotification(log, true);
+    }
+
+    function clearDiagnosticLogsUI() {
+      diagnosticLogs = [];
+      updateDiagnosticStats();
+      renderDiagnosticLogs();
+      showNotification({
+        level: 'rescue',
+        pid: 0,
+        process_name: 'Sistem',
+        action: 'Loglar Temizlendi',
+        message: 'Tüm teşhis ve olay kayıtları başarıyla sıfırlandı.'
+      }, false);
+    }
+
+    async function clearDiagnosticLogs() {
+      try {
+        await fetch('/api/logs?action=clear', { method: 'POST' });
+        clearDiagnosticLogsUI();
+      } catch (err) {
+        console.error('Log temizleme hatası:', err);
+      }
+    }
+
+    function showNotification(logItem, isLive) {
+      const banner = document.getElementById('globalNotificationBanner');
+      const orb = document.getElementById('globalThinkingOrb');
+      const badgeLevel = document.getElementById('notifBadgeLevel');
+      const badgeSource = document.getElementById('notifBadgeSource');
+      const timeElem = document.getElementById('notifTimestamp');
+      const msgElem = document.getElementById('notifMessage');
+      const errCounter = document.getElementById('notifErrorCounter');
+
+      if (!banner || !logItem) return;
+
+      banner.classList.remove('hidden');
+      banner.classList.remove('variant-error', 'variant-rescue', 'variant-idle');
+
+      if (logItem.level === 'error') {
+        banner.classList.add('variant-error');
+        if (orb) orb.className = 'thinking-orb error relative z-10';
+        setSonarTargetColor(1.0, 0.22, 0.28);
+        if (badgeLevel) {
+          badgeLevel.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full border bg-destructive/20 text-destructive border-destructive/30';
+          badgeLevel.textContent = logItem.http_status ? `HTTP ${logItem.http_status} HATA` : 'HATA';
+        }
+      } else if (logItem.level === 'rescue') {
+        banner.classList.add('variant-rescue');
+        if (orb) orb.className = 'thinking-orb rescue relative z-10';
+        setSonarTargetColor(0.06, 0.85, 0.55);
+        if (badgeLevel) {
+          badgeLevel.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+          badgeLevel.textContent = 'GERİ BİLDİRİM: KURTARMA';
+        }
+      } else if (logItem.level === 'feedback') {
+        if (orb) orb.className = 'thinking-orb working relative z-10';
+        setSonarTargetColor(0.22, 0.75, 1.0);
+        if (badgeLevel) {
+          badgeLevel.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full border bg-cyan-500/20 text-cyan-400 border-cyan-500/30';
+          badgeLevel.textContent = 'KRİPTO İMZA';
+        }
+      } else {
+        banner.classList.add('variant-idle');
+        if (orb) orb.className = 'thinking-orb idle relative z-10';
+        setSonarTargetColor(0.68, 0.35, 1.0);
+        if (badgeLevel) {
+          badgeLevel.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full border bg-violet-500/20 text-violet-400 border-violet-500/30';
+          badgeLevel.textContent = 'SİSTEM BİLGİSİ';
+        }
+      }
+
+      const procDisplay = logItem.process_name || 'Bilinmeyen';
+      if (badgeSource) {
+        badgeSource.textContent = logItem.pid ? `PID: ${logItem.pid} (${procDisplay})` : procDisplay;
+      }
+      if (timeElem) {
+        timeElem.textContent = logItem.timestamp || new Date().toLocaleTimeString();
+      }
+
+      if (msgElem) {
+        const titlePrefix = logItem.action ? `<strong>${escapeHtml(logItem.action)}:</strong> ` : '';
+        msgElem.innerHTML = `${titlePrefix}${escapeHtml(logItem.message || '')}`;
+      }
+
+      if (errCounter) {
+        if (logErrorCount > 0) {
+          errCounter.textContent = logErrorCount;
+          errCounter.classList.remove('hidden');
+        } else {
+          errCounter.classList.add('hidden');
+        }
+      }
+    }
+
+    function dismissNotification() {
+      const banner = document.getElementById('globalNotificationBanner');
+      if (banner) {
+        banner.classList.add('hidden');
+      }
+    }
+
+    function updateDiagnosticStats() {
+      logErrorCount = diagnosticLogs.filter(l => l.level === 'error').length;
+      logRescueCount = diagnosticLogs.filter(l => l.level === 'rescue').length;
+      logSignatureCount = diagnosticLogs.filter(l => l.category === 'signature_saved' || (l.action && l.action.includes('İmza'))).length;
+
+      const totalElem = document.getElementById('logStatTotal');
+      const errElem = document.getElementById('logStatErrors');
+      const rescueElem = document.getElementById('logStatRescues');
+      const sigElem = document.getElementById('logStatSignatures');
+
+      if (totalElem) totalElem.textContent = diagnosticLogs.length;
+      if (errElem) errElem.textContent = logErrorCount;
+      if (rescueElem) rescueElem.textContent = logRescueCount;
+      if (sigElem) sigElem.textContent = logSignatureCount;
+
+      const catErr = document.getElementById('catErrCount');
+      const catRescue = document.getElementById('catRescueCount');
+      if (catErr) catErr.textContent = logErrorCount;
+      if (catRescue) catRescue.textContent = logRescueCount;
+
+      const navBadge = document.getElementById('navLogsBadge');
+      if (navBadge) {
+        if (logErrorCount > 0) {
+          navBadge.textContent = logErrorCount;
+          navBadge.classList.remove('hidden');
+        } else {
+          navBadge.classList.add('hidden');
+        }
+      }
+    }
+
+    function populatePidFilter() {
+      const sel = document.getElementById('logPidFilter');
+      if (!sel) return;
+      const currentVal = sel.value;
+      const pids = new Set();
+      diagnosticLogs.forEach(l => {
+        if (l.pid > 0) pids.add(l.pid);
+      });
+
+      let opts = '<option value="">Tüm Süreçler (PID)</option>';
+      Array.from(pids).sort((a,b) => a-b).forEach(pid => {
+        const match = diagnosticLogs.find(l => l.pid === pid);
+        const name = match ? match.process_name : '';
+        opts += `<option value="${pid}">PID ${pid} (${escapeHtml(name)})</option>`;
+      });
+      sel.innerHTML = opts;
+      sel.value = currentVal;
+    }
+
+    function setLogCategoryFilter(cat) {
+      activeLogCategory = cat;
+      document.querySelectorAll('.log-cat-btn').forEach(btn => {
+        const isSelected = btn.getAttribute('data-cat') === cat;
+        if (isSelected) {
+          btn.className = "log-cat-btn px-2.5 py-1 rounded-md text-xs font-semibold bg-primary text-primary-foreground transition-all cursor-pointer";
+        } else {
+          btn.className = "log-cat-btn px-2.5 py-1 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-all cursor-pointer";
+        }
+      });
+      renderDiagnosticLogs();
+    }
+
+    function applyLogFilters() {
+      renderDiagnosticLogs();
+    }
+
+    function renderDiagnosticLogs() {
+      const container = document.getElementById('diagnosticLogsList');
+      if (!container) return;
+
+      const searchTerm = (document.getElementById('logSearchInput')?.value || '').toLowerCase().trim();
+      const pidFilter = document.getElementById('logPidFilter')?.value;
+
+      let filtered = diagnosticLogs.slice().reverse(); // En yeni en üstte
+
+      if (activeLogCategory !== 'all') {
+        filtered = filtered.filter(l => {
+          if (activeLogCategory === 'error') return l.level === 'error';
+          if (activeLogCategory === 'rescue') return l.level === 'rescue';
+          if (activeLogCategory === 'feedback') return l.level === 'feedback';
+          if (activeLogCategory === 'info') return l.level === 'info';
+          return true;
+        });
+      }
+
+      if (pidFilter) {
+        filtered = filtered.filter(l => String(l.pid) === pidFilter);
+      }
+
+      if (searchTerm) {
+        filtered = filtered.filter(l => {
+          const text = `${l.message} ${l.action} ${l.process_name} ${l.pid} ${l.model} ${l.http_status}`.toLowerCase();
+          return text.includes(searchTerm);
+        });
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="flex flex-col items-center justify-center p-12 rounded-xl border border-dashed border-border bg-card/40 text-center gap-2">
+            <div class="size-10 rounded-full bg-muted flex items-center justify-center text-lg">🔍</div>
+            <div class="text-sm font-semibold text-foreground">Kayıt Bulunamadı</div>
+            <div class="text-xs text-muted-foreground max-w-sm">Seçilen filtre ve arama kriterlerine uygun olay günlüğü kaydı yok.</div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map((item, idx) => {
+        let borderGlow = "border-border";
+        let badgeStyle = "bg-muted text-muted-foreground border-border";
+        let badgeLabel = item.action || "BİLGİ";
+        let orbState = "idle";
+
+        if (item.level === 'error') {
+          borderGlow = "border-destructive/40 bg-destructive/5 hover:border-destructive/60";
+          badgeStyle = "bg-destructive/20 text-destructive border-destructive/30";
+          badgeLabel = item.http_status ? `🔴 HTTP ${item.http_status} HATA` : '🔴 HATA';
+          orbState = "error";
+        } else if (item.level === 'rescue') {
+          borderGlow = "border-emerald-500/40 bg-emerald-500/5 hover:border-emerald-500/60";
+          badgeStyle = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+          badgeLabel = "🟢 GERİ BİLDİRİM: KURTARMA";
+          orbState = "rescue";
+        } else if (item.level === 'feedback') {
+          borderGlow = "border-cyan-500/40 bg-cyan-500/5 hover:border-cyan-500/60";
+          badgeStyle = "bg-cyan-500/20 text-cyan-400 border-cyan-500/30";
+          badgeLabel = "✨ KRİPTO İMZA";
+          orbState = "working";
+        } else {
+          borderGlow = "border-violet-500/30 bg-card hover:border-violet-500/50";
+          badgeStyle = "bg-violet-500/20 text-violet-400 border-violet-500/30";
+          badgeLabel = "ℹ️ SİSTEM / YÖNLENDİRME";
+          orbState = "idle";
+        }
+
+        const hasDetails = item.details && Object.keys(item.details).length > 0;
+        const detailsId = `log_details_${item.id || idx}`;
+
+        return `
+          <div class="flex flex-col gap-2 p-3.5 sm:p-4 rounded-xl border ${borderGlow} transition-all shadow-xs">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="flex items-center gap-2 flex-wrap min-w-0">
+                <span class="thinking-orb ${orbState} shrink-0" style="width:14px;height:14px;"></span>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgeStyle}">${badgeLabel}</span>
+                <span class="text-[11px] font-mono font-medium text-foreground bg-muted px-2 py-0.5 rounded border border-border/60">
+                  PID: ${item.pid || '-'} <span class="text-muted-foreground font-sans">(${escapeHtml(item.process_name || 'Bilinmeyen')})</span>
+                </span>
+                ${item.account ? `<span class="text-[10px] font-mono text-muted-foreground hidden sm:inline-flex">👤 ${escapeHtml(item.account)}</span>` : ''}
+                ${item.model ? `<span class="text-[10px] font-mono text-muted-foreground hidden sm:inline-flex">🤖 ${escapeHtml(item.model)}</span>` : ''}
+              </div>
+              <div class="flex items-center gap-2 text-xs font-mono text-muted-foreground shrink-0 ml-auto">
+                <span>${item.timestamp || '-'}</span>
+                ${hasDetails ? `
+                  <button onclick="toggleLogDetails('${detailsId}')" class="px-2 py-0.5 rounded bg-muted/80 hover:bg-muted border border-border text-[10px] font-medium text-foreground transition-colors cursor-pointer">
+                    Detay
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-1 text-xs">
+              ${item.action ? `<div class="font-semibold text-foreground text-sm">${escapeHtml(item.action)}</div>` : ''}
+              <div class="text-muted-foreground whitespace-pre-wrap leading-relaxed font-mono text-[11px]">${escapeHtml(item.message)}</div>
+            </div>
+
+            ${hasDetails ? `
+              <div id="${detailsId}" class="hidden flex flex-col gap-1.5 pt-2 border-t border-border/50">
+                <span class="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Teknik Parametreler & Bağlam (JSON):</span>
+                <pre class="p-2.5 rounded-lg bg-black/60 border border-border text-[10px] font-mono text-emerald-400 overflow-x-auto whitespace-pre-wrap">${escapeHtml(JSON.stringify(item.details, null, 2))}</pre>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function toggleLogDetails(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('hidden');
+    }
+
+    function exportDiagnosticLogs(format) {
+      if (!diagnosticLogs.length) {
+        alert('Dışa aktarılacak log bulunmuyor.');
+        return;
+      }
+      let dataStr = '';
+      let filename = `gateway_diagnostic_logs_${Date.now()}`;
+      if (format === 'json') {
+        dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(diagnosticLogs, null, 2));
+        filename += '.json';
+      } else {
+        const txt = diagnosticLogs.map(l => `[${l.timestamp}] [${l.level.toUpperCase()}] PID:${l.pid} (${l.process_name}) | ${l.action}: ${l.message}`).join('\n');
+        dataStr = "data:text/plain;charset=utf-8," + encodeURIComponent(txt);
+        filename += '.txt';
+      }
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", filename);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
     // 9. Bootstrap
     window.addEventListener('DOMContentLoaded', () => {
       connectWebSocket();
+      initSonarPulse();
       initMetalRingAnimations();
+      loadAutoSwitchConfig();
       loadAccounts();
       loadProgramRules();
       loadDetectedPrograms();
@@ -2516,6 +3880,9 @@
       fetch('/api/requests').then(res => res.json()).then(data => {
         if (data && data.requests) renderRecentRequests(data.requests);
       });
+      fetch('/api/logs').then(res => res.json()).then(data => {
+        if (data && data.logs) initDiagnosticLogs(data.logs);
+      }).catch(err => console.log('Diagnostic logs initial fetch:', err));
     });
   </script>
 </body>

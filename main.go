@@ -38,6 +38,21 @@ var (
 	totalCachedTokens       uint64
 )
 
+func parseStatusCodeFromError(err error) int {
+	if err == nil {
+		return 0
+	}
+	s := err.Error()
+	for _, code := range []int{400, 401, 403, 404, 408, 429, 500, 502, 503, 504} {
+		if strings.Contains(s, fmt.Sprintf("HTTP %d", code)) ||
+			strings.Contains(s, fmt.Sprintf("\"code\": %d", code)) ||
+			strings.Contains(s, fmt.Sprintf("\"code\":%d", code)) {
+			return code
+		}
+	}
+	return 500
+}
+
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -109,9 +124,30 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 func handleModels(w http.ResponseWriter, r *http.Request) {
 	createdTimestamp := 1789422000
 	models := []map[string]interface{}{
-		{"id": "gemini-3.8-flash-low", "object": "model", "created": createdTimestamp, "owned_by": "google"},
-		{"id": "gemini-3.8-flash-medium", "object": "model", "created": createdTimestamp, "owned_by": "google"},
-		{"id": "gemini-3.8-flash-high", "object": "model", "created": createdTimestamp, "owned_by": "google"},
+		{
+			"id":               "gemini-3.8-flash-low",
+			"object":           "model",
+			"created":          createdTimestamp,
+			"owned_by":         "google",
+			"input_modalities": []string{"text", "image", "video", "audio"},
+			"modalities":       []string{"text", "image", "video", "audio"},
+		},
+		{
+			"id":               "gemini-3.8-flash-medium",
+			"object":           "model",
+			"created":          createdTimestamp,
+			"owned_by":         "google",
+			"input_modalities": []string{"text", "image", "video", "audio"},
+			"modalities":       []string{"text", "image", "video", "audio"},
+		},
+		{
+			"id":               "gemini-3.8-flash-high",
+			"object":           "model",
+			"created":          createdTimestamp,
+			"owned_by":         "google",
+			"input_modalities": []string{"text", "image", "video", "audio"},
+			"modalities":       []string{"text", "image", "video", "audio"},
+		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -232,6 +268,12 @@ func handleAccountsAPI(w http.ResponseWriter, r *http.Request) {
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "deleted_id": body.ID})
 			return
 		}
+
+		if path == "refresh-all-quotas" {
+			go GlobalAccountStore.RefreshAllQuotas()
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "message": "Tüm kotalar yenileniyor"})
+			return
+		}
 	}
 
 	http.Error(w, "Not found", http.StatusNotFound)
@@ -340,6 +382,17 @@ func handleDetectedProgramsAPI(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"programs": []ProcessDetail{}})
 		return
 	}
+
+	if r.Method == http.MethodDelete || (r.Method == http.MethodPost && r.URL.Query().Get("action") == "clear") {
+		GlobalProcessInspector.ClearDetectedPrograms()
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":  true,
+			"message":  "Tespit edilen programlar temizlendi",
+			"programs": []ProcessDetail{},
+		})
+		return
+	}
+
 	procs := GlobalProcessInspector.GetDetectedPrograms()
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"programs": procs,
@@ -362,15 +415,28 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 	pid, exeName, displayName := GlobalProcessInspector.ResolveClientProcess(r.RemoteAddr)
 	targetAcc, ruleName := GlobalProgramRouter.RouteAccount(pid, exeName, displayName)
 
+	targetEmail := ""
+	targetName := ""
+	if targetAcc != nil {
+		targetEmail = targetAcc.Email
+		targetName = targetAcc.Name
+	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Error reading request body", http.StatusBadRequest)
 		return
 	}
 
-	payload, _, targetModel, thinkingBudget, err := ConvertOpenAiRequestToGemini(body, "")
+	pCtx := ProtocolContext{PID: pid, ProcessName: displayName, Account: targetEmail}
+
+	payload, _, targetModel, thinkingBudget, err := ConvertOpenAiRequestToGemini(body, "", pCtx)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Protocol conversion error: %v", err), http.StatusBadRequest)
+		GlobalDiagnosticLogger.LogHttpError(pid, displayName, targetEmail, "", 400, fmt.Sprintf("Protokol dönüştürme hatası: %v", err), map[string]interface{}{
+			"error":    err.Error(),
+			"endpoint": "/v1/responses",
+		})
 		return
 	}
 
@@ -392,13 +458,6 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 		effortStr = fmt.Sprintf("budget: %d", thinkingBudget)
 	} else if thinkingBudget == -1 {
 		effortStr = "high / auto"
-	}
-
-	targetEmail := ""
-	targetName := ""
-	if targetAcc != nil {
-		targetEmail = targetAcc.Email
-		targetName = targetAcc.Name
 	}
 
 	// Canlı İstek Başlangıç Bildirimi
@@ -427,7 +486,7 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	translator := NewStreamTranslator(w, true, modelName)
+	translator := NewStreamTranslator(w, true, modelName, pCtx)
 
 	err = GlobalGeminiClient.StreamGenerateContentWithAccount(payload, targetAcc, func(chunk *GeminiStreamChunk) error {
 		translator.HandleGeminiChunk(chunk)
@@ -438,6 +497,13 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Printf("[❌ /v1/responses Hata]: %v\n", err)
+		statusCode := parseStatusCodeFromError(err)
+		GlobalDiagnosticLogger.LogHttpError(pid, displayName, targetEmail, targetModel, statusCode, err.Error(), map[string]interface{}{
+			"endpoint":    "/v1/responses",
+			"applied_model": targetModel,
+			"duration_ms": elapsed,
+		})
+
 		errData, _ := json.Marshal(map[string]interface{}{
 			"error": err.Error(),
 		})
@@ -455,6 +521,15 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 	atomic.AddUint64(&totalInputTokens, uint64(translator.promptTokens))
 	atomic.AddUint64(&totalOutputTokens, uint64(translator.outputTokens))
 	atomic.AddUint64(&totalCachedTokens, uint64(translator.cachedTokens))
+
+	if GlobalAccountStore != nil && targetEmail != "" {
+		GlobalAccountStore.RecordTokenUsage(targetEmail, &GeminiUsageMetadata{
+			PromptTokenCount:        translator.promptTokens,
+			CandidatesTokenCount:    translator.outputTokens,
+			CachedContentTokenCount: translator.cachedTokens,
+			TotalTokenCount:         translator.totalTokens,
+		})
+	}
 
 	// Tamamlanma Bildirimi
 	reqInfo.Status = "completed"
@@ -485,15 +560,28 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	pid, exeName, displayName := GlobalProcessInspector.ResolveClientProcess(r.RemoteAddr)
 	targetAcc, ruleName := GlobalProgramRouter.RouteAccount(pid, exeName, displayName)
 
+	targetEmail := ""
+	targetName := ""
+	if targetAcc != nil {
+		targetEmail = targetAcc.Email
+		targetName = targetAcc.Name
+	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Error reading request body", http.StatusBadRequest)
 		return
 	}
 
-	payload, _, targetModel, thinkingBudget, err := ConvertOpenAiRequestToGemini(body, "")
+	pCtx := ProtocolContext{PID: pid, ProcessName: displayName, Account: targetEmail}
+
+	payload, _, targetModel, thinkingBudget, err := ConvertOpenAiRequestToGemini(body, "", pCtx)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Protocol conversion error: %v", err), http.StatusBadRequest)
+		GlobalDiagnosticLogger.LogHttpError(pid, displayName, targetEmail, "", 400, fmt.Sprintf("Protokol dönüştürme hatası: %v", err), map[string]interface{}{
+			"error":    err.Error(),
+			"endpoint": "/v1/chat/completions",
+		})
 		return
 	}
 
@@ -519,13 +607,6 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		effortStr = fmt.Sprintf("budget: %d", thinkingBudget)
 	} else if thinkingBudget == -1 {
 		effortStr = "high / auto"
-	}
-
-	targetEmail := ""
-	targetName := ""
-	if targetAcc != nil {
-		targetEmail = targetAcc.Email
-		targetName = targetAcc.Name
 	}
 
 	reqInfo := LiveRequestInfo{
@@ -554,7 +635,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Connection", "keep-alive")
 		w.Header().Set("X-Accel-Buffering", "no")
 
-		translator := NewStreamTranslator(w, false, modelName)
+		translator := NewStreamTranslator(w, false, modelName, pCtx)
 
 		err = GlobalGeminiClient.StreamGenerateContentWithAccount(payload, targetAcc, func(chunk *GeminiStreamChunk) error {
 			translator.HandleGeminiChunk(chunk)
@@ -565,6 +646,13 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			log.Printf("[❌ /v1/chat/completions Hata]: %v\n", err)
+			statusCode := parseStatusCodeFromError(err)
+			GlobalDiagnosticLogger.LogHttpError(pid, displayName, targetEmail, targetModel, statusCode, err.Error(), map[string]interface{}{
+				"endpoint":      "/v1/chat/completions",
+				"applied_model": targetModel,
+				"duration_ms":   elapsed,
+			})
+
 			errData, _ := json.Marshal(map[string]interface{}{
 				"error": map[string]interface{}{
 					"message": err.Error(),
@@ -585,6 +673,15 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		atomic.AddUint64(&totalInputTokens, uint64(translator.promptTokens))
 		atomic.AddUint64(&totalOutputTokens, uint64(translator.outputTokens))
 		atomic.AddUint64(&totalCachedTokens, uint64(translator.cachedTokens))
+
+		if GlobalAccountStore != nil && targetEmail != "" {
+			GlobalAccountStore.RecordTokenUsage(targetEmail, &GeminiUsageMetadata{
+				PromptTokenCount:        translator.promptTokens,
+				CandidatesTokenCount:    translator.outputTokens,
+				CachedContentTokenCount: translator.cachedTokens,
+				TotalTokenCount:         translator.totalTokens,
+			})
+		}
 
 		reqInfo.Status = "completed"
 		reqInfo.DurationMs = elapsed
@@ -634,6 +731,13 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			log.Printf("[❌ /v1/chat/completions Hata]: %v\n", err)
+			statusCode := parseStatusCodeFromError(err)
+			GlobalDiagnosticLogger.LogHttpError(pid, displayName, targetEmail, targetModel, statusCode, err.Error(), map[string]interface{}{
+				"endpoint":      "/v1/chat/completions (non-stream)",
+				"applied_model": targetModel,
+				"duration_ms":   elapsed,
+			})
+
 			w.WriteHeader(http.StatusInternalServerError)
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"error": map[string]interface{}{
@@ -660,6 +764,15 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		atomic.AddUint64(&totalInputTokens, uint64(promptTokens))
 		atomic.AddUint64(&totalOutputTokens, uint64(outputTokens))
 		atomic.AddUint64(&totalCachedTokens, uint64(cachedTokens))
+
+		if GlobalAccountStore != nil && targetEmail != "" {
+			GlobalAccountStore.RecordTokenUsage(targetEmail, &GeminiUsageMetadata{
+				PromptTokenCount:        promptTokens,
+				CandidatesTokenCount:    outputTokens,
+				CachedContentTokenCount: cachedTokens,
+				TotalTokenCount:         promptTokens + outputTokens,
+			})
+		}
 
 		reqInfo.Status = "completed"
 		reqInfo.DurationMs = elapsed
@@ -758,6 +871,10 @@ func main() {
 	// Program Bazlı Hesap Yönlendirme API
 	mux.HandleFunc("/api/program-rules", handleProgramRulesAPI)
 	mux.HandleFunc("/api/detected-programs", handleDetectedProgramsAPI)
+
+	// Teşhis ve Olay Günlüğü REST API
+	mux.HandleFunc("/api/logs", handleDiagnosticLogsAPI)
+	mux.HandleFunc("/api/logs/", handleDiagnosticLogsAPI)
 
 	handler := corsMiddleware(mux)
 

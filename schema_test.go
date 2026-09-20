@@ -99,3 +99,77 @@ func TestConvertSchemaTypeToGemini(t *testing.T) {
 		t.Errorf("FAIL: empty 'required' was not deleted!")
 	}
 }
+
+func TestEndingWithModelTurnGuards(t *testing.T) {
+	// Scenario 1: Request ends with assistant message
+	req1 := `{
+		"model": "gemini-3.8-flash-medium",
+		"messages": [
+			{"role": "user", "content": "Hello"},
+			{"role": "assistant", "content": "Hi, how can I help?"}
+		]
+	}`
+	payload1, _, _, _, err1 := ConvertOpenAiRequestToGemini([]byte(req1), "")
+	if err1 != nil {
+		t.Fatalf("Convert error: %v", err1)
+	}
+	if len(payload1.Request.Contents) == 0 {
+		t.Fatalf("Contents empty")
+	}
+	last1 := payload1.Request.Contents[len(payload1.Request.Contents)-1]
+	if last1.Role != "user" {
+		t.Errorf("FAIL Scenario 1: Expected last turn role 'user', got '%s'", last1.Role)
+	}
+
+	// Scenario 2: Request ends with tool output (function_call_output / role: tool)
+	req2 := `{
+		"model": "gemini-3.8-flash-medium",
+		"messages": [
+			{"role": "user", "content": "What is the weather?"},
+			{
+				"role": "assistant",
+				"tool_calls": [
+					{
+						"id": "call_123",
+						"type": "function",
+						"function": {"name": "get_weather", "arguments": "{\"city\":\"Izmir\"}"}
+					}
+				]
+			},
+			{
+				"role": "tool",
+				"tool_call_id": "call_123",
+				"content": "Sunny, 24C"
+			}
+		]
+	}`
+	payload2, _, _, _, err2 := ConvertOpenAiRequestToGemini([]byte(req2), "")
+	if err2 != nil {
+		t.Fatalf("Convert error: %v", err2)
+	}
+	if len(payload2.Request.Contents) == 0 {
+		t.Fatalf("Contents empty")
+	}
+	last2 := payload2.Request.Contents[len(payload2.Request.Contents)-1]
+	if last2.Role != "user" {
+		t.Errorf("FAIL Scenario 2: Expected last turn role 'user', got '%s'", last2.Role)
+	}
+
+	// Scenario 3: Request starts with assistant message
+	req3 := `{
+		"model": "gemini-3.8-flash-medium",
+		"messages": [
+			{"role": "assistant", "content": "System greeting"},
+			{"role": "user", "content": "Hi"}
+		]
+	}`
+	payload3, _, _, _, err3 := ConvertOpenAiRequestToGemini([]byte(req3), "")
+	if err3 != nil {
+		t.Fatalf("Convert error: %v", err3)
+	}
+	first3 := payload3.Request.Contents[0]
+	if first3.Role != "user" {
+		t.Errorf("FAIL Scenario 3: Expected first turn role 'user', got '%s'", first3.Role)
+	}
+}
+

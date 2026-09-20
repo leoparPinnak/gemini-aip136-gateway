@@ -37,18 +37,32 @@ type AccountQuota struct {
 	LastUpdated  int64        `json:"last_updated"`
 }
 
+type AccountTokenUsage struct {
+	TotalPromptTokens     int64  `json:"total_prompt_tokens"`
+	TotalCandidatesTokens int64  `json:"total_candidates_tokens"`
+	TotalTokens           int64  `json:"total_tokens"`
+	TotalCachedTokens     int64  `json:"total_cached_tokens"`
+	RequestCount          int64  `json:"request_count"`
+	LastPromptTokens      int    `json:"last_prompt_tokens"`
+	LastCandidatesTokens  int    `json:"last_candidates_tokens"`
+	LastTotalTokens       int    `json:"last_total_tokens"`
+	LastCachedTokens      int    `json:"last_cached_tokens"`
+	LastActiveTime        string `json:"last_active_time"` // RFC3339
+}
+
 type Account struct {
-	ID           string        `json:"id"`
-	Email        string        `json:"email"`
-	Name         string        `json:"name"`
-	Picture      string        `json:"picture"`
-	RefreshToken string        `json:"refresh_token"`
-	AccessToken  string        `json:"access_token"`
-	Expiry       string        `json:"expiry"`
-	IsActive     bool          `json:"is_active"`
-	PlanType     string        `json:"plan_type"` // "PRO"
-	Quota        *AccountQuota `json:"quota,omitempty"`
-	LastChecked  int64         `json:"last_checked"`
+	ID           string             `json:"id"`
+	Email        string             `json:"email"`
+	Name         string             `json:"name"`
+	Picture      string             `json:"picture"`
+	RefreshToken string             `json:"refresh_token"`
+	AccessToken  string             `json:"access_token"`
+	Expiry       string             `json:"expiry"`
+	IsActive     bool               `json:"is_active"`
+	PlanType     string             `json:"plan_type"` // "PRO"
+	Quota        *AccountQuota      `json:"quota,omitempty"`
+	TokenUsage   *AccountTokenUsage `json:"token_usage,omitempty"`
+	LastChecked  int64              `json:"last_checked"`
 }
 
 type AccountStore struct {
@@ -89,6 +103,12 @@ func InitAccountStore() error {
 			}
 			// Arka planda kotaları güncelle
 			go store.RefreshAllQuotas()
+			go func() {
+				ticker := time.NewTicker(5 * time.Minute)
+				for range ticker.C {
+					store.RefreshAllQuotas()
+				}
+			}()
 			return nil
 		}
 	}
@@ -104,6 +124,13 @@ func InitAccountStore() error {
 	} else {
 		log.Printf("[AccountStore] Windows Credential içe aktarılamadı: %v", err)
 	}
+
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		for range ticker.C {
+			store.RefreshAllQuotas()
+		}
+	}()
 
 	return nil
 }
@@ -318,6 +345,55 @@ func (s *AccountStore) DeleteAccount(id string) error {
 	_ = s.saveLocked()
 	BroadcastAccountChange()
 	return nil
+}
+
+// RecordTokenUsage gelen usageMetadata bilgilerini ilgili hesaba işler ve WebSocket ile anlık yayınlar
+func (s *AccountStore) RecordTokenUsage(emailOrID string, usage *GeminiUsageMetadata) {
+	if usage == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var targetAcc *Account
+	for _, acc := range s.Accounts {
+		if acc.ID == emailOrID || strings.EqualFold(acc.Email, emailOrID) {
+			targetAcc = acc
+			break
+		}
+	}
+	if targetAcc == nil {
+		for _, acc := range s.Accounts {
+			if acc.IsActive {
+				targetAcc = acc
+				break
+			}
+		}
+	}
+	if targetAcc == nil && len(s.Accounts) > 0 {
+		targetAcc = s.Accounts[0]
+	}
+	if targetAcc == nil {
+		return
+	}
+
+	if targetAcc.TokenUsage == nil {
+		targetAcc.TokenUsage = &AccountTokenUsage{}
+	}
+
+	targetAcc.TokenUsage.TotalPromptTokens += int64(usage.PromptTokenCount)
+	targetAcc.TokenUsage.TotalCandidatesTokens += int64(usage.CandidatesTokenCount)
+	targetAcc.TokenUsage.TotalTokens += int64(usage.TotalTokenCount)
+	targetAcc.TokenUsage.TotalCachedTokens += int64(usage.CachedContentTokenCount)
+	targetAcc.TokenUsage.RequestCount++
+	targetAcc.TokenUsage.LastPromptTokens = usage.PromptTokenCount
+	targetAcc.TokenUsage.LastCandidatesTokens = usage.CandidatesTokenCount
+	targetAcc.TokenUsage.LastTotalTokens = usage.TotalTokenCount
+	targetAcc.TokenUsage.LastCachedTokens = usage.CachedContentTokenCount
+	targetAcc.TokenUsage.LastActiveTime = time.Now().Format(time.RFC3339)
+
+	_ = s.saveLocked()
+	BroadcastAccountChange()
 }
 
 func (s *AccountStore) RefreshAccountToken(acc *Account) (string, error) {

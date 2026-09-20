@@ -340,6 +340,13 @@ func (pi *ProcessInspector) GetDetectedPrograms() []ProcessDetail {
 	return list
 }
 
+// ClearDetectedPrograms tespit edilen harici programlar önbelleğini sıfırlar.
+func (pi *ProcessInspector) ClearDetectedPrograms() {
+	pi.mu.Lock()
+	defer pi.mu.Unlock()
+	pi.detected = make(map[int]*ProcessDetail)
+}
+
 // ----------------------------------------------------------------------
 // SÜREÇ AĞ VE PORT DETAY İNCELEYİCİSİ (INSPECTOR MODAL)
 // ----------------------------------------------------------------------

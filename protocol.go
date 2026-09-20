@@ -1,18 +1,35 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
+	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 )
 
 // Gemini CloudCode AIP-136 Structures
+type GeminiInlineData struct {
+	MimeType string `json:"mimeType"`
+	Data     string `json:"data"`
+}
+
+type GeminiFileData struct {
+	MimeType string `json:"mimeType"`
+	FileURI  string `json:"fileUri"`
+}
+
 type GeminiPart struct {
 	Text             string                  `json:"text,omitempty"`
 	Thought          bool                    `json:"thought,omitempty"`
+	InlineData       *GeminiInlineData       `json:"inlineData,omitempty"`
+	FileData         *GeminiFileData         `json:"fileData,omitempty"`
 	FunctionCall     *GeminiFunctionCall     `json:"functionCall,omitempty"`
 	FunctionResponse *GeminiFunctionResponse `json:"functionResponse,omitempty"`
 	ThoughtSignature string                  `json:"thoughtSignature,omitempty"`
@@ -273,8 +290,302 @@ func extractStringFromContent(v interface{}) string {
 	return ""
 }
 
+func parseDataURLOrMedia(rawURL string, defaultMime string) *GeminiInlineData {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return nil
+	}
+
+	// 1. data:<mimeType>;base64,<data>
+	if strings.HasPrefix(rawURL, "data:") {
+		parts := strings.SplitN(rawURL, ",", 2)
+		if len(parts) == 2 {
+			meta := parts[0]
+			data := parts[1]
+			mime := defaultMime
+			if mime == "" {
+				mime = "image/png"
+			}
+			metaParts := strings.Split(strings.TrimPrefix(meta, "data:"), ";")
+			if len(metaParts) > 0 && metaParts[0] != "" {
+				mime = metaParts[0]
+			}
+			return &GeminiInlineData{
+				MimeType: mime,
+				Data:     strings.TrimSpace(data),
+			}
+		}
+	}
+
+	// 2. Pure base64 data (length >= 100, no spaces, no path separators)
+	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") && len(rawURL) > 100 && !strings.Contains(rawURL, " ") && !strings.Contains(rawURL, "\\") {
+		if _, err := base64.StdEncoding.DecodeString(rawURL); err == nil {
+			mime := defaultMime
+			if mime == "" {
+				mime = "image/png"
+			}
+			return &GeminiInlineData{
+				MimeType: mime,
+				Data:     rawURL,
+			}
+		}
+	}
+
+	// 3. Local file path (e.g. C:\... or /... or file://...)
+	filePath := rawURL
+	if strings.HasPrefix(filePath, "file:///") {
+		filePath = strings.TrimPrefix(filePath, "file:///")
+		filePath = filepath.FromSlash(filePath)
+	} else if strings.HasPrefix(filePath, "file://") {
+		filePath = strings.TrimPrefix(filePath, "file://")
+		filePath = filepath.FromSlash(filePath)
+	}
+
+	if fileBytes, err := os.ReadFile(filePath); err == nil && len(fileBytes) > 0 {
+		mime := defaultMime
+		if mime == "" {
+			ext := strings.ToLower(filepath.Ext(filePath))
+			switch ext {
+			case ".png":
+				mime = "image/png"
+			case ".jpg", ".jpeg":
+				mime = "image/jpeg"
+			case ".webp":
+				mime = "image/webp"
+			case ".gif":
+				mime = "image/gif"
+			case ".svg":
+				mime = "image/svg+xml"
+			case ".mp4":
+				mime = "video/mp4"
+			case ".webm":
+				mime = "video/webm"
+			case ".mov":
+				mime = "video/quicktime"
+			case ".pdf":
+				mime = "application/pdf"
+			case ".mp3":
+				mime = "audio/mp3"
+			case ".wav":
+				mime = "audio/wav"
+			default:
+				mime = http.DetectContentType(fileBytes)
+			}
+		}
+		return &GeminiInlineData{
+			MimeType: mime,
+			Data:     base64.StdEncoding.EncodeToString(fileBytes),
+		}
+	}
+
+	// 4. Remote HTTP/HTTPS URL
+	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") {
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Get(rawURL)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			defer resp.Body.Close()
+			b, err := io.ReadAll(resp.Body)
+			if err == nil && len(b) > 0 {
+				mime := resp.Header.Get("Content-Type")
+				if mime == "" {
+					mime = defaultMime
+				}
+				if mime == "" {
+					mime = http.DetectContentType(b)
+				}
+				return &GeminiInlineData{
+					MimeType: mime,
+					Data:     base64.StdEncoding.EncodeToString(b),
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func parseSingleMapToGeminiPart(m map[string]interface{}) *GeminiPart {
+	t, _ := m["type"].(string)
+
+	// 1. Text types
+	if t == "text" || t == "input_text" || t == "output_text" {
+		text, _ := m["text"].(string)
+		if text == "" {
+			text, _ = m["input_text"].(string)
+		}
+		if text != "" {
+			return &GeminiPart{Text: text}
+		}
+		return nil
+	}
+
+	// 2. Image types: "image_url", "input_image", "image"
+	if t == "image_url" || t == "input_image" || t == "image" {
+		var rawURL string
+		if iuMap, ok := m["image_url"].(map[string]interface{}); ok {
+			rawURL, _ = iuMap["url"].(string)
+		} else if iuStr, ok := m["image_url"].(string); ok {
+			rawURL = iuStr
+		} else if u, ok := m["url"].(string); ok {
+			rawURL = u
+		} else if b64, ok := m["image_bytes"].(string); ok {
+			rawURL = b64
+		} else if data, ok := m["data"].(string); ok {
+			rawURL = data
+		}
+
+		defaultMime := "image/png"
+		if mime, ok := m["mime_type"].(string); ok && mime != "" {
+			defaultMime = mime
+		} else if mime, ok := m["mimeType"].(string); ok && mime != "" {
+			defaultMime = mime
+		}
+
+		inline := parseDataURLOrMedia(rawURL, defaultMime)
+		if inline != nil {
+			return &GeminiPart{InlineData: inline}
+		}
+		return nil
+	}
+
+	// 3. Video types: "video_url", "input_video", "video"
+	if t == "video_url" || t == "input_video" || t == "video" {
+		var rawURL string
+		if vuMap, ok := m["video_url"].(map[string]interface{}); ok {
+			rawURL, _ = vuMap["url"].(string)
+		} else if vuStr, ok := m["video_url"].(string); ok {
+			rawURL = vuStr
+		} else if u, ok := m["url"].(string); ok {
+			rawURL = u
+		} else if data, ok := m["data"].(string); ok {
+			rawURL = data
+		}
+
+		defaultMime := "video/mp4"
+		if mime, ok := m["mime_type"].(string); ok && mime != "" {
+			defaultMime = mime
+		}
+		inline := parseDataURLOrMedia(rawURL, defaultMime)
+		if inline != nil {
+			return &GeminiPart{InlineData: inline}
+		}
+		return nil
+	}
+
+	// 4. Audio types: "input_audio", "audio_url", "audio"
+	if t == "input_audio" || t == "audio_url" || t == "audio" {
+		var rawURL string
+		defaultMime := "audio/mp3"
+		if auMap, ok := m["input_audio"].(map[string]interface{}); ok {
+			rawURL, _ = auMap["data"].(string)
+			if fmtStr, ok := auMap["format"].(string); ok && fmtStr != "" {
+				defaultMime = "audio/" + fmtStr
+			}
+		} else if data, ok := m["data"].(string); ok {
+			rawURL = data
+		}
+		inline := parseDataURLOrMedia(rawURL, defaultMime)
+		if inline != nil {
+			return &GeminiPart{InlineData: inline}
+		}
+		return nil
+	}
+
+	// 5. Generic File / Document: "input_file", "file"
+	if t == "input_file" || t == "file" {
+		var rawURL string
+		if fu, ok := m["file_url"].(string); ok {
+			rawURL = fu
+		} else if u, ok := m["url"].(string); ok {
+			rawURL = u
+		} else if data, ok := m["data"].(string); ok {
+			rawURL = data
+		}
+		defaultMime := "application/pdf"
+		if mime, ok := m["mime_type"].(string); ok && mime != "" {
+			defaultMime = mime
+		}
+		inline := parseDataURLOrMedia(rawURL, defaultMime)
+		if inline != nil {
+			return &GeminiPart{InlineData: inline}
+		}
+		return nil
+	}
+
+	// Fallback to text if present
+	if txt, ok := m["text"].(string); ok && txt != "" {
+		return &GeminiPart{Text: txt}
+	}
+
+	return nil
+}
+
+func extractPartsFromContent(v interface{}) []GeminiPart {
+	if v == nil {
+		return nil
+	}
+
+	var parts []GeminiPart
+
+	if s, ok := v.(string); ok {
+		if strings.TrimSpace(s) != "" {
+			parts = append(parts, GeminiPart{Text: s})
+		}
+		return parts
+	}
+
+	if m, ok := v.(map[string]interface{}); ok {
+		part := parseSingleMapToGeminiPart(m)
+		if part != nil {
+			parts = append(parts, *part)
+		}
+		return parts
+	}
+
+	if arr, ok := v.([]interface{}); ok {
+		for _, item := range arr {
+			if s, ok := item.(string); ok {
+				if strings.TrimSpace(s) != "" {
+					parts = append(parts, GeminiPart{Text: s})
+				}
+			} else if m, ok := item.(map[string]interface{}); ok {
+				part := parseSingleMapToGeminiPart(m)
+				if part != nil {
+					parts = append(parts, *part)
+				}
+			}
+		}
+	}
+
+	return parts
+}
+
+func hasFunctionCall(parts []GeminiPart) bool {
+	for _, p := range parts {
+		if p.FunctionCall != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func hasFunctionResponse(parts []GeminiPart) bool {
+	for _, p := range parts {
+		if p.FunctionResponse != nil {
+			return true
+		}
+	}
+	return false
+}
+
+type ProtocolContext struct {
+	PID         int
+	ProcessName string
+	Account     string
+}
+
 // ConvertOpenAiRequestToGemini processes OpenAI JSON request into Google AIP-136 format
-func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string) (*GeminiAipPayload, bool, string, int, error) {
+func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ...ProtocolContext) (*GeminiAipPayload, bool, string, int, error) {
 	var body map[string]interface{}
 	if err := json.Unmarshal(rawBody, &body); err != nil {
 		return nil, false, "", 0, fmt.Errorf("invalid JSON body: %w", err)
@@ -328,12 +639,33 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string) (*Gemi
 
 		// 2. User Message
 		if role == "user" {
-			text := extractStringFromContent(item["content"])
-			contents = append(contents, GeminiContent{
-				Role:  "user",
-				Parts: []GeminiPart{{Text: text}},
-			})
+			parts := extractPartsFromContent(item["content"])
+			if len(parts) == 0 {
+				text := extractStringFromContent(item["content"])
+				if text != "" {
+					parts = []GeminiPart{{Text: text}}
+				}
+			}
+			if len(parts) > 0 {
+				contents = append(contents, GeminiContent{
+					Role:  "user",
+					Parts: parts,
+				})
+			}
 			continue
+		}
+
+		// Direct Responses API input item (input_text, input_image, input_video, etc.)
+		if itemType == "input_text" || itemType == "input_image" || itemType == "image_url" ||
+			itemType == "input_video" || itemType == "video_url" || itemType == "input_file" ||
+			itemType == "file" || itemType == "input_audio" || itemType == "audio_url" {
+			if part := parseSingleMapToGeminiPart(item); part != nil {
+				contents = append(contents, GeminiContent{
+					Role:  "user",
+					Parts: []GeminiPart{*part},
+				})
+				continue
+			}
 		}
 
 		// 3. Assistant / Model Message
@@ -370,8 +702,48 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string) (*Gemi
 							Args: argsMap,
 						},
 					}
-					if sig := GlobalThoughtStore.Get(callID, name); sig != "" {
+					clientSig, _ := fn["thought_signature"].(string)
+					if clientSig == "" {
+						clientSig, _ = fn["thoughtSignature"].(string)
+					}
+					sig := clientSig
+					if sig == "" {
+						sig = GlobalThoughtStore.Get(callID, name)
+					}
+
+					// 🛡️ AKILLI KURTARMA: Eğer gerçek bir Google kriptografik imzası yoksa (>= 80 karakter),
+					// Google CloudCode 400 'Corrupted thought signature' veya 'missing thought_signature' hatası verir.
+					// Bu eski adımı modelin geçmiş metin çıktısı olarak güvenle temsil ediyoruz:
+					if len(sig) >= 80 {
 						part.ThoughtSignature = sig
+					} else {
+						argsBytes, _ := json.Marshal(argsMap)
+						part = GeminiPart{
+							Text: fmt.Sprintf("[Araç Çağrısı: %s(%s)]", name, string(argsBytes)),
+						}
+
+						// 🟢 Geri Bildirim / Kurtarma Logu
+						cPID := 0
+						cProc := "İstemci"
+						cAcc := ""
+						if len(ctx) > 0 {
+							cPID = ctx[0].PID
+							cProc = ctx[0].ProcessName
+							cAcc = ctx[0].Account
+						}
+						GlobalDiagnosticLogger.LogRescue(
+							cPID,
+							cProc,
+							cAcc,
+							"",
+							"Düşünce İmzası Kurtarma (Degradation)",
+							fmt.Sprintf("'%s' araç çağrısı geçerli kriptografik imza içermediği için güvenli metin formatına dönüştürüldü (HTTP 400 engellendi).", name),
+							map[string]interface{}{
+								"tool_name": name,
+								"call_id":   callID,
+								"mechanism": "Graceful Text Degradation",
+							},
+						)
 					}
 					parts = append(parts, part)
 				}
@@ -407,9 +779,48 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string) (*Gemi
 					Args: argsMap,
 				},
 			}
-			if sig := GlobalThoughtStore.Get(callID, name); sig != "" {
-				part.ThoughtSignature = sig
+			clientSig, _ := item["thought_signature"].(string)
+			if clientSig == "" {
+				clientSig, _ = item["thoughtSignature"].(string)
 			}
+			sig := clientSig
+			if sig == "" {
+				sig = GlobalThoughtStore.Get(callID, name)
+			}
+
+			// 🛡️ AKILLI KURTARMA: Gerçek Google imzası yoksa metne dönüştür
+			if len(sig) >= 80 {
+				part.ThoughtSignature = sig
+			} else {
+				argsBytes, _ := json.Marshal(argsMap)
+				part = GeminiPart{
+					Text: fmt.Sprintf("[Araç Çağrısı: %s(%s)]", name, string(argsBytes)),
+				}
+
+				// 🟢 Geri Bildirim / Kurtarma Logu
+				cPID := 0
+				cProc := "İstemci"
+				cAcc := ""
+				if len(ctx) > 0 {
+					cPID = ctx[0].PID
+					cProc = ctx[0].ProcessName
+					cAcc = ctx[0].Account
+				}
+				GlobalDiagnosticLogger.LogRescue(
+					cPID,
+					cProc,
+					cAcc,
+					"",
+					"Düşünce İmzası Kurtarma (Degradation)",
+					fmt.Sprintf("'%s' araç çağrısı geçerli kriptografik imza içermediği için güvenli metin formatına dönüştürüldü (HTTP 400 engellendi).", name),
+					map[string]interface{}{
+						"tool_name": name,
+						"call_id":   callID,
+						"mechanism": "Graceful Text Degradation",
+					},
+				)
+			}
+
 			contents = append(contents, GeminiContent{
 				Role:  "model",
 				Parts: []GeminiPart{part},
@@ -428,6 +839,25 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string) (*Gemi
 			}
 
 			outputStr := ""
+			var toolMediaParts []GeminiPart
+
+			rawOutput := item["output"]
+			if rawOutput == nil {
+				rawOutput = item["content"]
+			}
+
+			if arr, ok := rawOutput.([]interface{}); ok {
+				for _, p := range extractPartsFromContent(arr) {
+					if p.InlineData != nil || p.FileData != nil {
+						toolMediaParts = append(toolMediaParts, p)
+					}
+				}
+			} else if m, ok := rawOutput.(map[string]interface{}); ok {
+				if p := parseSingleMapToGeminiPart(m); p != nil && (p.InlineData != nil || p.FileData != nil) {
+					toolMediaParts = append(toolMediaParts, *p)
+				}
+			}
+
 			if out, ok := item["output"].(string); ok {
 				outputStr = out
 			} else if out, ok := item["content"].(string); ok {
@@ -448,9 +878,29 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string) (*Gemi
 				name = "tool"
 			}
 
-			// Google CloudCode internal protocol passes functionResponse under 'model' role
+			sig := GlobalThoughtStore.Get(callID, name)
+			// Eğer ilgili araç çağrısı imzasızdıysa, sonucunu da güvenle metin olarak ekle
+			if len(sig) < 80 {
+				contents = append(contents, GeminiContent{
+					Role: "user",
+					Parts: []GeminiPart{
+						{
+							Text: fmt.Sprintf("[Araç Çıktısı (%s)]:\n%s", name, outputStr),
+						},
+					},
+				})
+				if len(toolMediaParts) > 0 {
+					contents = append(contents, GeminiContent{
+						Role:  "user",
+						Parts: toolMediaParts,
+					})
+				}
+				continue
+			}
+
+			// Google CloudCode / Gemini API: Araç yanıtları (functionResponse) istemci tarafından 'user' rolü ile iletilir
 			contents = append(contents, GeminiContent{
-				Role: "model",
+				Role: "user",
 				Parts: []GeminiPart{
 					{
 						FunctionResponse: &GeminiFunctionResponse{
@@ -461,6 +911,14 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string) (*Gemi
 					},
 				},
 			})
+
+			// Araç bir görsel/medya ürettiyse (örn: ekran görüntüsü veya resim okuma), bunu bir sonraki kullanıcı turunda modele ilet
+			if len(toolMediaParts) > 0 {
+				contents = append(contents, GeminiContent{
+					Role:  "user",
+					Parts: toolMediaParts,
+				})
+			}
 			continue
 		}
 	}
@@ -601,15 +1059,83 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string) (*Gemi
 	}
 
 	// Merge adjacent turns with identical roles (AIP-136 requirement)
+	// Important: Do not merge a turn with FunctionCall and a turn with FunctionResponse
 	var mergedContents []GeminiContent
 	for _, c := range contents {
 		if len(mergedContents) > 0 && mergedContents[len(mergedContents)-1].Role == c.Role {
-			mergedContents[len(mergedContents)-1].Parts = append(mergedContents[len(mergedContents)-1].Parts, c.Parts...)
+			prev := mergedContents[len(mergedContents)-1]
+			if (hasFunctionCall(prev.Parts) && hasFunctionResponse(c.Parts)) ||
+				(hasFunctionResponse(prev.Parts) && hasFunctionCall(c.Parts)) {
+				mergedContents = append(mergedContents, GeminiContent{
+					Role:  c.Role,
+					Parts: append([]GeminiPart{}, c.Parts...),
+				})
+			} else {
+				mergedContents[len(mergedContents)-1].Parts = append(mergedContents[len(mergedContents)-1].Parts, c.Parts...)
+			}
 		} else {
 			mergedContents = append(mergedContents, GeminiContent{
 				Role:  c.Role,
 				Parts: append([]GeminiPart{}, c.Parts...),
 			})
+		}
+	}
+
+	// 🛡️ Fail-Safe Guards: AIP-136 ve Google CloudCode Kural Denetimleri
+	// 1. İstek asla 'model' turu ile başlayamaz (Google kuralı: İlk tur 'user' olmalıdır)
+	if len(mergedContents) > 0 && mergedContents[0].Role == "model" {
+		mergedContents = append([]GeminiContent{
+			{
+				Role:  "user",
+				Parts: []GeminiPart{{Text: "Hello."}},
+			},
+		}, mergedContents...)
+	}
+
+	// 2. İstek ASLA 'model' turu ile bitemez (Google 400: "Requests ending with a model turn are not supported")
+	if len(mergedContents) == 0 {
+		mergedContents = append(mergedContents, GeminiContent{
+			Role:  "user",
+			Parts: []GeminiPart{{Text: "Hello"}},
+		})
+	} else if mergedContents[len(mergedContents)-1].Role == "model" {
+		lastIdx := len(mergedContents) - 1
+		// Eğer son tur yalnızca functionResponse içeriyorsa, rolünü 'user' yap
+		if hasFunctionResponse(mergedContents[lastIdx].Parts) && !hasFunctionCall(mergedContents[lastIdx].Parts) {
+			mergedContents[lastIdx].Role = "user"
+			if lastIdx > 0 && mergedContents[lastIdx-1].Role == "user" {
+				mergedContents[lastIdx-1].Parts = append(mergedContents[lastIdx-1].Parts, mergedContents[lastIdx].Parts...)
+				mergedContents = mergedContents[:lastIdx]
+			}
+		} else {
+			// Model metni, düşünce veya functionCall ile bitiyorsa, modelin yanıt üretebilmesi için kullanıcı devam turu ekle
+			mergedContents = append(mergedContents, GeminiContent{
+				Role:  "user",
+				Parts: []GeminiPart{{Text: "Continue."}},
+			})
+		}
+
+		// Kurtarma Logu: HTTP 400'ün nasıl önlendiğini panele bildir
+		cPID := 0
+		cProc := "İstemci"
+		cAcc := ""
+		if len(ctx) > 0 {
+			cPID = ctx[0].PID
+			cProc = ctx[0].ProcessName
+			cAcc = ctx[0].Account
+		}
+		if GlobalDiagnosticLogger != nil {
+			GlobalDiagnosticLogger.LogRescue(
+				cPID,
+				cProc,
+				cAcc,
+				"",
+				"Model Turu Bitişi Düzeltme (Role Guard)",
+				"İstek 'model' turu ile sonlandığı için Google CloudCode HTTP 400 hatası önlendi ve 'user' devam turu ile güvenli hale getirildi.",
+				map[string]interface{}{
+					"mechanism": "Model Turn Termination Guard",
+				},
+			)
 		}
 	}
 

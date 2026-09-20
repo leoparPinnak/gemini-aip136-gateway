@@ -188,6 +188,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			"accounts":        GlobalAccountStore.GetAllAccounts(),
 			"settings":        GlobalSettingsManager.Get(),
 			"recent_requests": GlobalWSHub.GetRecentRequests(),
+			"diagnostic_logs": GlobalDiagnosticLogger.GetAll(),
 		},
 		"time_ms": time.Now().UnixMilli(),
 	}
@@ -248,6 +249,7 @@ func handleSSEEvents(w http.ResponseWriter, r *http.Request) {
 			"accounts":        GlobalAccountStore.GetAllAccounts(),
 			"settings":        GlobalSettingsManager.Get(),
 			"recent_requests": GlobalWSHub.GetRecentRequests(),
+			"diagnostic_logs": GlobalDiagnosticLogger.GetAll(),
 		},
 		"time_ms": time.Now().UnixMilli(),
 	}
