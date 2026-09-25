@@ -30,7 +30,7 @@ type RequestLogEntry struct {
 	UpReqID    string `json:"up_req_id,omitempty"` // protocol.go upstream requestId
 	SessionID  string `json:"session_id,omitempty"`
 	PID        int    `json:"pid"`
-	PIDZero    bool   `json:"pid_zero,omitempty"`
+	PIDZero    bool   `json:"pid_zero"` // pid<=0 sabit oturum anahtarı kullanıldı mı (her zaman yazılır)
 	Account    string `json:"account,omitempty"`
 	ProxyID    string `json:"proxy_id,omitempty"`
 	Model      string `json:"model,omitempty"`
@@ -52,8 +52,8 @@ type RequestLogEntry struct {
 	SysHash   string  `json:"sys_hash,omitempty"`   // sha256(systemInstruction)
 
 	// bağlantı ölçümü (A2 httptrace)
-	ConnReused    bool   `json:"conn_reused,omitempty"`
-	ConnWaitMs    int64  `json:"conn_wait_ms,omitempty"` // istek→GotConn (yeniden kullanım gecikmesi)
+	ConnReused    bool   `json:"conn_reused"`     // false = yeni bağlantı, true = havuz yeniden kullanımı (her zaman yazılır)
+	ConnWaitMs    int64  `json:"conn_wait_ms"`    // istek→GotConn (yeniden kullanım gecikmesi; 0 = beklenmedi)
 	UpstreamTrace string `json:"up_trace,omitempty"`     // x-request-id / traceId
 
 	LastUsage json.RawMessage `json:"last_usage,omitempty"` // cached==0 iken ham usageMetadata
