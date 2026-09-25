@@ -61,3 +61,15 @@ if ($misses.Count) {
         Write-Output ("  {0} pr={1,-6} ep={2,-22} sys={3} tools={4} trace={5}" -f $_.ts.Substring(11,8), $_.prompt, $_.endpoint, $_.sys_hash, $_.tools_hash, $_.up_trace)
     }
 }
+
+# cache_probe deneyi: miss sonrasi ayni icerikle kontrollu tekrar (CACHE_MISS_PROBE=1)
+$probes = @($evts | Where-Object { $_.Kind -eq 'cache_probe' })
+if ($probes.Count) {
+    $realProbes = @($probes | Where-Object { $_.Fields.orig_cach -eq 0 })
+    Write-Output "--- cache_probe (kok-neden deneyi) ---"
+    Write-Output ("  pencere: {0} probe / GERCEK miss uzerinde: {1}" -f $probes.Count, $realProbes.Count)
+    $realProbes | Select-Object -Last 10 | ForEach-Object {
+        $f = $_.Fields
+        Write-Output ("  {0} orig={1} pr={2} -> probe_ca={3}/{4}  {5}  ({6}ms)" -f $_.ts.Substring(11,8), $f.orig_req, $f.orig_prompt, $f.probe_cached, $f.probe_prompt, $f.verdict, $f.probe_ms)
+    }
+}
