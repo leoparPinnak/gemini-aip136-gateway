@@ -1,10 +1,13 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -291,10 +294,36 @@ func extractStringFromContent(v interface{}) string {
 	return ""
 }
 
-func parseDataURLOrMedia(rawURL string, defaultMime string) *GeminiInlineData {
+// ---------------------------------------------------------------------------
+// B3: Medya kararlılığı — mediaCache (path/URL → son iyi baytlar)
+//
+// Eski davranış: her istekte dosya/URL yeniden okunur, hatada nil dönüp parça
+// SESSİZCE düşerdi → sonraki turda parça gelince prefix kırılır, cache miss
+// olurdu. Yeni davranış:
+//   - dosya her zaman okunur (değişiklik algılanır); hash aynıysa base64
+//     yeniden hesaplanmaz (determinizm + CPU kazancı),
+//   - okuma/indirme hatasında son iyi değer kullanılır (prefix sabit),
+//   - hiç alınmamışsa HATA döner (dürüst hata; Convert 400 ile döner).
+// ---------------------------------------------------------------------------
+
+type mediaCacheEntry struct {
+	Data      []byte // ham bayt
+	Mime      string
+	Hash      string
+	Timestamp time.Time
+}
+
+var mediaCache sync.Map // "f:"+path | "u:"+url → mediaCacheEntry
+
+func mediaHash(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+func parseDataURLOrMedia(rawURL string, defaultMime string) (*GeminiInlineData, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
-		return nil
+		return nil, fmt.Errorf("medya kaynağı boş (url/data alanı eksik)")
 	}
 
 	// 1. data:<mimeType>;base64,<data>
@@ -314,7 +343,7 @@ func parseDataURLOrMedia(rawURL string, defaultMime string) *GeminiInlineData {
 			return &GeminiInlineData{
 				MimeType: mime,
 				Data:     strings.TrimSpace(data),
-			}
+			}, nil
 		}
 	}
 
@@ -328,8 +357,13 @@ func parseDataURLOrMedia(rawURL string, defaultMime string) *GeminiInlineData {
 			return &GeminiInlineData{
 				MimeType: mime,
 				Data:     rawURL,
-			}
+			}, nil
 		}
+	}
+
+	// 4. Remote HTTP/HTTPS URL → parseRemoteMedia (son iyi değer + hata B3)
+	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") {
+		return parseRemoteMedia(rawURL, defaultMime, "u:"+rawURL)
 	}
 
 	// 3. Local file path (e.g. C:\... or /... or file://...)
@@ -342,6 +376,7 @@ func parseDataURLOrMedia(rawURL string, defaultMime string) *GeminiInlineData {
 		filePath = filepath.FromSlash(filePath)
 	}
 
+	cacheKey := "f:" + filePath
 	if fileBytes, err := os.ReadFile(filePath); err == nil && len(fileBytes) > 0 {
 		mime := defaultMime
 		if mime == "" {
@@ -373,39 +408,62 @@ func parseDataURLOrMedia(rawURL string, defaultMime string) *GeminiInlineData {
 				mime = http.DetectContentType(fileBytes)
 			}
 		}
+		hash := mediaHash(fileBytes)
+		if v, ok := mediaCache.Load(cacheKey); ok {
+			e := v.(mediaCacheEntry)
+			if e.Hash == hash && e.Mime == mime && len(e.Data) == len(fileBytes) {
+				// Bayt değişmedi → cache'lenmiş base64'ü dön (yeniden hesaplama yok)
+				return &GeminiInlineData{MimeType: mime, Data: base64.StdEncoding.EncodeToString(e.Data)}, nil
+			}
+		}
+		mediaCache.Store(cacheKey, mediaCacheEntry{Data: fileBytes, Mime: mime, Hash: hash, Timestamp: time.Now()})
 		return &GeminiInlineData{
 			MimeType: mime,
 			Data:     base64.StdEncoding.EncodeToString(fileBytes),
-		}
+		}, nil
 	}
-
-	// 4. Remote HTTP/HTTPS URL
-	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") {
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.Get(rawURL)
-		if err == nil && resp.StatusCode == http.StatusOK {
-			defer resp.Body.Close()
-			b, err := io.ReadAll(resp.Body)
-			if err == nil && len(b) > 0 {
-				mime := resp.Header.Get("Content-Type")
-				if mime == "" {
-					mime = defaultMime
-				}
-				if mime == "" {
-					mime = http.DetectContentType(b)
-				}
-				return &GeminiInlineData{
-					MimeType: mime,
-					Data:     base64.StdEncoding.EncodeToString(b),
-				}
-			}
-		}
+	// Dosya okunamadı → son iyi değer korunur (prefix sabit); hiç yoksa hata (B3).
+	if v, ok := mediaCache.Load(cacheKey); ok {
+		e := v.(mediaCacheEntry)
+		log.Printf("[Media] ⚠️ dosya okunamadı, SON İYİ DEĞER kullanılıyor: %s", filePath)
+		GlobalReqLog.LogEvent("media_stale", map[string]interface{}{"src": filePath, "reason": "file_read_failed"})
+		return &GeminiInlineData{MimeType: e.Mime, Data: base64.StdEncoding.EncodeToString(e.Data)}, nil
 	}
-
-	return nil
+	return nil, fmt.Errorf("medya dosyası okunamadı: %s", filePath)
 }
 
-func parseSingleMapToGeminiPart(m map[string]interface{}) *GeminiPart {
+// parseRemoteMedia 4. Remote HTTP/HTTPS URL — hata ve son-iyi-değer B3 mantığı.
+func parseRemoteMedia(rawURL, defaultMime, cacheKey string) (*GeminiInlineData, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(rawURL)
+	if err == nil && resp.StatusCode == http.StatusOK {
+		defer resp.Body.Close()
+		b, rerr := io.ReadAll(resp.Body)
+		if rerr == nil && len(b) > 0 {
+			mime := resp.Header.Get("Content-Type")
+			if mime == "" {
+				mime = defaultMime
+			}
+			if mime == "" {
+				mime = http.DetectContentType(b)
+			}
+			mediaCache.Store(cacheKey, mediaCacheEntry{Data: b, Mime: mime, Hash: mediaHash(b), Timestamp: time.Now()})
+			return &GeminiInlineData{
+				MimeType: mime,
+				Data:     base64.StdEncoding.EncodeToString(b),
+			}, nil
+		}
+	}
+	if v, ok := mediaCache.Load(cacheKey); ok {
+		e := v.(mediaCacheEntry)
+		log.Printf("[Media] ⚠️ indirme başarısız, SON İYİ DEĞER kullanılıyor: %s", rawURL)
+		GlobalReqLog.LogEvent("media_stale", map[string]interface{}{"src": rawURL, "reason": "http_fetch_failed"})
+		return &GeminiInlineData{MimeType: e.Mime, Data: base64.StdEncoding.EncodeToString(e.Data)}, nil
+	}
+	return nil, fmt.Errorf("medya indirilemedi: %s", rawURL)
+}
+
+func parseSingleMapToGeminiPart(m map[string]interface{}) (*GeminiPart, error) {
 	t, _ := m["type"].(string)
 
 	// 1. Text types
@@ -415,9 +473,9 @@ func parseSingleMapToGeminiPart(m map[string]interface{}) *GeminiPart {
 			text, _ = m["input_text"].(string)
 		}
 		if text != "" {
-			return &GeminiPart{Text: text}
+			return &GeminiPart{Text: text}, nil
 		}
-		return nil
+		return nil, nil
 	}
 
 	// 2. Image types: "image_url", "input_image", "image"
@@ -442,11 +500,14 @@ func parseSingleMapToGeminiPart(m map[string]interface{}) *GeminiPart {
 			defaultMime = mime
 		}
 
-		inline := parseDataURLOrMedia(rawURL, defaultMime)
-		if inline != nil {
-			return &GeminiPart{InlineData: inline}
+		inline, mErr := parseDataURLOrMedia(rawURL, defaultMime)
+		if mErr != nil {
+			return nil, mErr
 		}
-		return nil
+		if inline != nil {
+			return &GeminiPart{InlineData: inline}, nil
+		}
+		return nil, nil
 	}
 
 	// 3. Video types: "video_url", "input_video", "video"
@@ -466,11 +527,14 @@ func parseSingleMapToGeminiPart(m map[string]interface{}) *GeminiPart {
 		if mime, ok := m["mime_type"].(string); ok && mime != "" {
 			defaultMime = mime
 		}
-		inline := parseDataURLOrMedia(rawURL, defaultMime)
-		if inline != nil {
-			return &GeminiPart{InlineData: inline}
+		inline, mErr := parseDataURLOrMedia(rawURL, defaultMime)
+		if mErr != nil {
+			return nil, mErr
 		}
-		return nil
+		if inline != nil {
+			return &GeminiPart{InlineData: inline}, nil
+		}
+		return nil, nil
 	}
 
 	// 4. Audio types: "input_audio", "audio_url", "audio"
@@ -485,11 +549,14 @@ func parseSingleMapToGeminiPart(m map[string]interface{}) *GeminiPart {
 		} else if data, ok := m["data"].(string); ok {
 			rawURL = data
 		}
-		inline := parseDataURLOrMedia(rawURL, defaultMime)
-		if inline != nil {
-			return &GeminiPart{InlineData: inline}
+		inline, mErr := parseDataURLOrMedia(rawURL, defaultMime)
+		if mErr != nil {
+			return nil, mErr
 		}
-		return nil
+		if inline != nil {
+			return &GeminiPart{InlineData: inline}, nil
+		}
+		return nil, nil
 	}
 
 	// 5. Generic File / Document: "input_file", "file"
@@ -506,24 +573,27 @@ func parseSingleMapToGeminiPart(m map[string]interface{}) *GeminiPart {
 		if mime, ok := m["mime_type"].(string); ok && mime != "" {
 			defaultMime = mime
 		}
-		inline := parseDataURLOrMedia(rawURL, defaultMime)
-		if inline != nil {
-			return &GeminiPart{InlineData: inline}
+		inline, mErr := parseDataURLOrMedia(rawURL, defaultMime)
+		if mErr != nil {
+			return nil, mErr
 		}
-		return nil
+		if inline != nil {
+			return &GeminiPart{InlineData: inline}, nil
+		}
+		return nil, nil
 	}
 
 	// Fallback to text if present
 	if txt, ok := m["text"].(string); ok && txt != "" {
-		return &GeminiPart{Text: txt}
+		return &GeminiPart{Text: txt}, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
-func extractPartsFromContent(v interface{}) []GeminiPart {
+func extractPartsFromContent(v interface{}) ([]GeminiPart, error) {
 	if v == nil {
-		return nil
+		return nil, nil
 	}
 
 	var parts []GeminiPart
@@ -532,15 +602,18 @@ func extractPartsFromContent(v interface{}) []GeminiPart {
 		if strings.TrimSpace(s) != "" {
 			parts = append(parts, GeminiPart{Text: s})
 		}
-		return parts
+		return parts, nil
 	}
 
 	if m, ok := v.(map[string]interface{}); ok {
-		part := parseSingleMapToGeminiPart(m)
+		part, err := parseSingleMapToGeminiPart(m)
+		if err != nil {
+			return nil, err
+		}
 		if part != nil {
 			parts = append(parts, *part)
 		}
-		return parts
+		return parts, nil
 	}
 
 	if arr, ok := v.([]interface{}); ok {
@@ -550,7 +623,10 @@ func extractPartsFromContent(v interface{}) []GeminiPart {
 					parts = append(parts, GeminiPart{Text: s})
 				}
 			} else if m, ok := item.(map[string]interface{}); ok {
-				part := parseSingleMapToGeminiPart(m)
+				part, err := parseSingleMapToGeminiPart(m)
+				if err != nil {
+					return nil, err
+				}
 				if part != nil {
 					parts = append(parts, *part)
 				}
@@ -558,7 +634,7 @@ func extractPartsFromContent(v interface{}) []GeminiPart {
 		}
 	}
 
-	return parts
+	return parts, nil
 }
 
 func hasFunctionCall(parts []GeminiPart) bool {
@@ -598,17 +674,22 @@ func getStealthSessionID(pid int, customSessionID string) string {
 	if customSessionID != "" {
 		return customSessionID
 	}
-	if pid > 0 {
-		stealthSessionMutex.Lock()
-		defer stealthSessionMutex.Unlock()
-		if sID, ok := stealthSessionMap[pid]; ok && sID != "" {
-			return sID
-		}
-		newSID := fmt.Sprintf("-%d", 1000000000000000000+rand.Int63n(8000000000000000000))
-		stealthSessionMap[pid] = newSID
-		return newSID
+	key := pid
+	if pid <= 0 {
+		// B1: PID çözülemediğinde HER istekte rastgele SID üretilmesi,
+		// oturum/worker affinitesini kırıp cache miss üretiyordu (A1 hipotezi).
+		// pid=0 için tek sabit giriş kullanılır.
+		key = 0
 	}
-	return fmt.Sprintf("-%d", 1000000000000000000+rand.Int63n(8000000000000000000))
+	stealthSessionMutex.Lock()
+	defer stealthSessionMutex.Unlock()
+	if sID, ok := stealthSessionMap[key]; ok && sID != "" {
+		return sID
+	}
+	newSID := fmt.Sprintf("-%d", 1000000000000000000+rand.Int63n(8000000000000000000))
+	stealthSessionMap[key] = newSID
+	sessionsDirty() // B1 kalıcılığı: restart SID'leri korur
+	return newSID
 }
 
 // GetStealthSessionID, istemci PID'si için kayıtlı veya yeni üretilen oturum kimliğini döner.
@@ -682,7 +763,10 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 
 		// 2. User Message
 		if role == "user" {
-			parts := extractPartsFromContent(item["content"])
+			parts, contentErr := extractPartsFromContent(item["content"])
+			if contentErr != nil {
+				return nil, false, "", 0, fmt.Errorf("medya ayrıştırma hatası: %w", contentErr)
+			}
 			if len(parts) == 0 {
 				text := extractStringFromContent(item["content"])
 				if text != "" {
@@ -702,7 +786,9 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 		if itemType == "input_text" || itemType == "input_image" || itemType == "image_url" ||
 			itemType == "input_video" || itemType == "video_url" || itemType == "input_file" ||
 			itemType == "file" || itemType == "input_audio" || itemType == "audio_url" {
-			if part := parseSingleMapToGeminiPart(item); part != nil {
+			if part, partErr := parseSingleMapToGeminiPart(item); partErr != nil {
+				return nil, false, "", 0, fmt.Errorf("medya ayrıştırma hatası: %w", partErr)
+			} else if part != nil {
 				contents = append(contents, GeminiContent{
 					Role:  "user",
 					Parts: []GeminiPart{*part},
@@ -890,13 +976,21 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 			}
 
 			if arr, ok := rawOutput.([]interface{}); ok {
-				for _, p := range extractPartsFromContent(arr) {
+				outParts, outErr := extractPartsFromContent(arr)
+				if outErr != nil {
+					return nil, false, "", 0, fmt.Errorf("araç çıktısı medya hatası: %w", outErr)
+				}
+				for _, p := range outParts {
 					if p.InlineData != nil || p.FileData != nil {
 						toolMediaParts = append(toolMediaParts, p)
 					}
 				}
 			} else if m, ok := rawOutput.(map[string]interface{}); ok {
-				if p := parseSingleMapToGeminiPart(m); p != nil && (p.InlineData != nil || p.FileData != nil) {
+				p, pErr := parseSingleMapToGeminiPart(m)
+				if pErr != nil {
+					return nil, false, "", 0, fmt.Errorf("araç çıktısı medya hatası: %w", pErr)
+				}
+				if p != nil && (p.InlineData != nil || p.FileData != nil) {
 					toolMediaParts = append(toolMediaParts, *p)
 				}
 			}

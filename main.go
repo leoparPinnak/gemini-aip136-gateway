@@ -587,7 +587,8 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 
 	translator := NewStreamTranslator(w, true, modelName, pCtx)
 
-	err = GlobalGeminiClient.StreamGenerateContentWithAccount(payload, targetAcc, func(chunk *GeminiStreamChunk) error {
+	ci := &ConnInfo{}
+	err = GlobalGeminiClient.StreamGenerateContentWithAccount(payload, targetAcc, ci, func(chunk *GeminiStreamChunk) error {
 		translator.HandleGeminiChunk(chunk)
 		return nil
 	})
@@ -612,10 +613,23 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 		reqInfo.DurationMs = elapsed
 		reqInfo.ErrorMsg = err.Error()
 		BroadcastRequestEvent(reqInfo)
+
+		le := newReqLogBase(reqID, payload, pid, targetEmail, targetModel, effortStr, "/v1/responses", reqStart)
+		le.Status = "error"
+		le.ErrorMsg = err.Error()
+		if le.Cached == 0 && len(translator.lastUsageRaw) > 0 {
+			le.LastUsage = translator.lastUsageRaw
+		}
+		le.Prompt = translator.promptTokens
+		le.Cached = translator.cachedTokens
+		le.Total = translator.totalTokens
+		le.Output = translator.outputTokens
+		attachConn(&le, ci, translator.lastTraceID)
+		GlobalReqLog.Log(le)
 		return
 	}
 
-	translator.FinishStream()
+	truncated := translator.FinishStream()
 
 	atomic.AddUint64(&totalInputTokens, uint64(translator.promptTokens))
 	atomic.AddUint64(&totalOutputTokens, uint64(translator.outputTokens))
@@ -632,6 +646,9 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 
 	// Tamamlanma Bildirimi
 	reqInfo.Status = "completed"
+	if truncated {
+		reqInfo.Status = "truncated" // A4: final finishReason gelmedi — usage kayıp olabilir
+	}
 	reqInfo.DurationMs = elapsed
 	reqInfo.InputTokens = translator.promptTokens
 	reqInfo.OutputTokens = translator.outputTokens
@@ -641,6 +658,21 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[✓ /v1/responses Tamamlandı] PID: %d | Süre: %dms | Prompt: %d | Cache: %d | Output: %d\n",
 		pid, elapsed, translator.promptTokens, translator.cachedTokens, translator.outputTokens)
+
+	le := newReqLogBase(reqID, payload, pid, targetEmail, targetModel, effortStr, "/v1/responses", reqStart)
+	le.Status = "completed"
+	if truncated {
+		le.Status = "truncated"
+	}
+	if le.Cached == 0 && len(translator.lastUsageRaw) > 0 {
+		le.LastUsage = translator.lastUsageRaw
+	}
+	le.Prompt = translator.promptTokens
+	le.Cached = translator.cachedTokens
+	le.Total = translator.totalTokens
+	le.Output = translator.outputTokens
+	attachConn(&le, ci, translator.lastTraceID)
+	GlobalReqLog.Log(le)
 }
 
 func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
@@ -737,7 +769,8 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 		translator := NewStreamTranslator(w, false, modelName, pCtx)
 
-		err = GlobalGeminiClient.StreamGenerateContentWithAccount(payload, targetAcc, func(chunk *GeminiStreamChunk) error {
+		ci := &ConnInfo{}
+		err = GlobalGeminiClient.StreamGenerateContentWithAccount(payload, targetAcc, ci, func(chunk *GeminiStreamChunk) error {
 			translator.HandleGeminiChunk(chunk)
 			return nil
 		})
@@ -765,10 +798,23 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			reqInfo.DurationMs = elapsed
 			reqInfo.ErrorMsg = err.Error()
 			BroadcastRequestEvent(reqInfo)
+
+			le := newReqLogBase(reqID, payload, pid, targetEmail, targetModel, effortStr, "/v1/chat/completions", reqStart)
+			le.Status = "error"
+			le.ErrorMsg = err.Error()
+			if le.Cached == 0 && len(translator.lastUsageRaw) > 0 {
+				le.LastUsage = translator.lastUsageRaw
+			}
+			le.Prompt = translator.promptTokens
+			le.Cached = translator.cachedTokens
+			le.Total = translator.totalTokens
+			le.Output = translator.outputTokens
+			attachConn(&le, ci, translator.lastTraceID)
+			GlobalReqLog.Log(le)
 			return
 		}
 
-		translator.FinishStream()
+		truncated := translator.FinishStream()
 
 		atomic.AddUint64(&totalInputTokens, uint64(translator.promptTokens))
 		atomic.AddUint64(&totalOutputTokens, uint64(translator.outputTokens))
@@ -784,6 +830,9 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		reqInfo.Status = "completed"
+		if truncated {
+			reqInfo.Status = "truncated" // A4: final finishReason gelmedi — usage kayıp olabilir
+		}
 		reqInfo.DurationMs = elapsed
 		reqInfo.InputTokens = translator.promptTokens
 		reqInfo.OutputTokens = translator.outputTokens
@@ -793,14 +842,36 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 		log.Printf("[✓ /v1/chat/completions Tamamlandı] PID: %d | Süre: %dms | Prompt: %d | Cache: %d | Output: %d\n",
 			pid, elapsed, translator.promptTokens, translator.cachedTokens, translator.outputTokens)
+
+		le := newReqLogBase(reqID, payload, pid, targetEmail, targetModel, effortStr, "/v1/chat/completions", reqStart)
+		le.Status = "completed"
+		if truncated {
+			le.Status = "truncated"
+		}
+		if le.Cached == 0 && len(translator.lastUsageRaw) > 0 {
+			le.LastUsage = translator.lastUsageRaw
+		}
+		le.Prompt = translator.promptTokens
+		le.Cached = translator.cachedTokens
+		le.Total = translator.totalTokens
+		le.Output = translator.outputTokens
+		attachConn(&le, ci, translator.lastTraceID)
+		GlobalReqLog.Log(le)
 	} else {
 		// Non-streaming response
 		var thoughtText strings.Builder
 		var outputText strings.Builder
 		var fnCalls []GeminiFunctionCall
 		var usage *GeminiUsageMetadata
+		var lastTrace string
 
-		err = GlobalGeminiClient.StreamGenerateContentWithAccount(payload, targetAcc, func(chunk *GeminiStreamChunk) error {
+		ci := &ConnInfo{}
+		err = GlobalGeminiClient.StreamGenerateContentWithAccount(payload, targetAcc, ci, func(chunk *GeminiStreamChunk) error {
+			if chunk.Response.TraceID != "" {
+				lastTrace = chunk.Response.TraceID
+			} else if chunk.TraceID != "" {
+				lastTrace = chunk.TraceID
+			}
 			if chunk.Response.UsageMetadata != nil {
 				usage = chunk.Response.UsageMetadata
 			} else if chunk.UsageMetadata != nil {
@@ -821,6 +892,11 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 					}
 					if p.FunctionCall != nil {
 						fnCalls = append(fnCalls, *p.FunctionCall)
+						// B2: non-stream yolda da imza depolanır (akışla tutarlılık);
+						// eskiden hiç saklanmıyor, sonraki turlarda imzasız kalıyordu.
+						if p.ThoughtSignature != "" {
+							GlobalThoughtStore.Store(p.FunctionCall.ID, p.FunctionCall.Name, p.ThoughtSignature)
+						}
 					}
 				}
 			}
@@ -849,6 +925,23 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			reqInfo.DurationMs = elapsed
 			reqInfo.ErrorMsg = err.Error()
 			BroadcastRequestEvent(reqInfo)
+
+			le := newReqLogBase(reqID, payload, pid, targetEmail, targetModel, effortStr, "/v1/chat/completions", reqStart)
+			le.Status = "error"
+			le.ErrorMsg = err.Error()
+			if usage != nil {
+				le.Prompt = usage.PromptTokenCount
+				le.Cached = usage.CachedContentTokenCount
+				le.Output = usage.CandidatesTokenCount
+				le.Total = usage.TotalTokenCount
+			}
+			if le.Cached == 0 && usage != nil {
+				if raw, err := json.Marshal(usage); err == nil {
+					le.LastUsage = raw
+				}
+			}
+			attachConn(&le, ci, lastTrace)
+			GlobalReqLog.Log(le)
 			return
 		}
 
@@ -881,6 +974,23 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		reqInfo.CachedTokens = cachedTokens
 		reqInfo.CacheHit = cachedTokens > 0
 		BroadcastRequestEvent(reqInfo)
+
+		le := newReqLogBase(reqID, payload, pid, targetEmail, targetModel, effortStr, "/v1/chat/completions", reqStart)
+		le.Status = "completed"
+		le.Prompt = promptTokens
+		le.Cached = cachedTokens
+		le.Output = outputTokens
+		le.Total = promptTokens + outputTokens
+		if usage != nil && usage.TotalTokenCount > 0 {
+			le.Total = usage.TotalTokenCount
+		}
+		if le.Cached == 0 && usage != nil {
+			if raw, err := json.Marshal(usage); err == nil {
+				le.LastUsage = raw
+			}
+		}
+		attachConn(&le, ci, lastTrace)
+		GlobalReqLog.Log(le)
 
 		outText := outputText.String()
 		if outText == "" && len(fnCalls) == 0 {

@@ -131,6 +131,18 @@ type ProxyManager struct {
 	mu       sync.RWMutex
 	proxies  map[string]*ProxyConfig
 	filePath string
+
+	// C1: proxy başına paylaşılan transport havuzu — eski kod HER istekte yeni
+	// http.Transport üretiyor (TCP+TLS+H2 handshake: +100-300ms ve socket
+	// birikimi). Aynı proxyID için taşıyıcı yeniden kullanılır; proxy URL'si
+	// değişirse eski havuz kapatılır ve yenisi üretilir.
+	tmu        sync.Mutex
+	transports map[string]*proxyTransport
+}
+
+type proxyTransport struct {
+	url string
+	tr  *http.Transport
 }
 
 var GlobalProxyManager *ProxyManager
@@ -138,8 +150,9 @@ var GlobalProxyManager *ProxyManager
 func InitProxyManager(baseDir string) (*ProxyManager, error) {
 	filePath := filepath.Join(baseDir, "proxies.json")
 	mgr := &ProxyManager{
-		proxies:  make(map[string]*ProxyConfig),
-		filePath: filePath,
+		proxies:    make(map[string]*ProxyConfig),
+		filePath:   filePath,
+		transports: make(map[string]*proxyTransport),
 	}
 
 	if data, err := os.ReadFile(filePath); err == nil && len(data) > 0 {
@@ -342,6 +355,13 @@ func (m *ProxyManager) GetHttpClientForProxy(proxyID string, timeout time.Durati
 		return &http.Client{Timeout: timeout}
 	}
 
+	// C1: transport havuzu — URL aynıysa YENİDEN KULLAN (yeniden bağlanma yok).
+	m.tmu.Lock()
+	defer m.tmu.Unlock()
+	if e, exists := m.transports[proxyID]; exists && e.url == p.URL {
+		return &http.Client{Transport: e.tr, Timeout: timeout}
+	}
+
 	tr := &http.Transport{
 		Proxy: http.ProxyURL(parsedURL),
 		TLSClientConfig: &tls.Config{
@@ -352,6 +372,11 @@ func (m *ProxyManager) GetHttpClientForProxy(proxyID string, timeout time.Durati
 		IdleConnTimeout:     90 * time.Second,
 		TLSHandshakeTimeout: 10 * time.Second,
 	}
+	if old, exists := m.transports[proxyID]; exists {
+		old.tr.CloseIdleConnections() // URL değişti → eski havuz kapatılır
+		log.Printf("[ProxyManager] proxy URL değişti, transport yenilendi: %s", proxyID)
+	}
+	m.transports[proxyID] = &proxyTransport{url: p.URL, tr: tr}
 	return &http.Client{
 		Transport: tr,
 		Timeout:   timeout,

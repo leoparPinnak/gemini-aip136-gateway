@@ -2937,13 +2937,28 @@
       }
     }
 
+    // A3 yarış guard'ı: id -> terminal durum. Tamamlanmış satır, geç gelen
+    // "running" WS kopyasıyla geriye çevrilemez (sunucu ws_hub.go'da da korur).
+    const liveReqTerminal = {};
+
     function prependLiveRequest(req) {
       const tbody = document.getElementById('requestsTableBody');
       const existing = document.getElementById('req-' + req.id);
+      const isTerminal = req.status === 'completed' || req.status === 'error' || req.status === 'truncated';
+
       if (existing) {
+        if (liveReqTerminal[req.id] && !isTerminal) return; // geç running'i yok say
         existing.innerHTML = createRequestRowHTML(req);
+        if (isTerminal) liveReqTerminal[req.id] = true;
+        // Tablodan düşen satırların guard kayıtlarını temizle (büyüme engeli)
+        if (Object.keys(liveReqTerminal).length > 60) {
+          for (const k in liveReqTerminal) {
+            if (!document.getElementById('req-' + k)) delete liveReqTerminal[k];
+          }
+        }
         return;
       }
+      if (isTerminal) liveReqTerminal[req.id] = true;
       if (tbody.children.length === 1 && tbody.children[0].innerText.includes('Henüz')) {
         tbody.innerHTML = '';
       }
@@ -2968,7 +2983,9 @@
         ? `<span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">200 OK</span>`
         : (req.status === 'running' 
           ? `<span class="inline-flex items-center rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-400 animate-pulse">Stream</span>`
-          : `<span class="inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">Hata</span>`);
+          : (req.status === 'truncated'
+            ? `<span class="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400" title="Akış STOP gelmeden koptu — usage kayıp olabilir">⚠ Koptu</span>`
+            : `<span class="inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">Hata</span>`));
 
       return `
         <td class="px-4 py-2.5">

@@ -414,7 +414,7 @@ func (s *AccountStore) RecordTokenUsage(emailOrID string, usage *GeminiUsageMeta
 	BroadcastAccountChange()
 }
 
-func (s *AccountStore) RefreshAccountToken(acc *Account) (string, error) {
+func (s *AccountStore) RefreshAccountToken(acc *Account, reason string) (string, error) {
 	if acc.RefreshToken == "" {
 		return acc.AccessToken, nil
 	}
@@ -463,11 +463,23 @@ func (s *AccountStore) RefreshAccountToken(acc *Account) (string, error) {
 		return "", err
 	}
 
+	oldHash := tokHash(acc.AccessToken)
+
 	s.mu.Lock()
 	acc.AccessToken = res.AccessToken
 	acc.Expiry = time.Now().Add(time.Duration(res.ExpiresIn) * time.Second).Format(time.RFC3339Nano)
 	_ = s.saveLocked()
 	s.mu.Unlock()
+
+	// A1: token rotasyonu cache-hit ile doğrudan ilişkili (OAuth token = cache
+	// routing faktörü). JSONL'e olay olarak yaz; miss korelasyonunda kullanılır.
+	GlobalReqLog.LogEvent("token_refresh", map[string]interface{}{
+		"account":    acc.Email,
+		"reason":     reason,
+		"old_hash":   oldHash,
+		"new_hash":   tokHash(res.AccessToken),
+		"expires_in": res.ExpiresIn,
+	})
 
 	return res.AccessToken, nil
 }
@@ -490,7 +502,7 @@ func (s *AccountStore) RefreshAccountQuota(id string) (*AccountQuota, error) {
 	// Token geçerliliğini sağla
 	token := acc.AccessToken
 	if acc.RefreshToken != "" {
-		if t, err := s.RefreshAccountToken(acc); err == nil && t != "" {
+		if t, err := s.RefreshAccountToken(acc, "quota_refresh"); err == nil && t != "" {
 			token = t
 		} else if err != nil {
 			log.Printf("[AccountStore] Kota sorgulama öncesi token yenileme uyarısı (%s): %v", acc.Email, err)
@@ -602,7 +614,7 @@ func (s *AccountStore) GetTokenForAccount(acc *Account) (string, error) {
 	// Süresi dolmuş mu?
 	if exp, err := time.Parse(time.RFC3339Nano, acc.Expiry); err == nil {
 		if time.Now().After(exp.Add(-2 * time.Minute)) {
-			return s.RefreshAccountToken(acc)
+			return s.RefreshAccountToken(acc, "expiry_2min")
 		}
 	}
 
@@ -610,7 +622,7 @@ func (s *AccountStore) GetTokenForAccount(acc *Account) (string, error) {
 		return acc.AccessToken, nil
 	}
 
-	return s.RefreshAccountToken(acc)
+	return s.RefreshAccountToken(acc, "empty_token")
 }
 
 // ----------------------------------------------------------------------
@@ -903,7 +915,7 @@ func (s *AccountStore) AddRefreshToken(refreshToken string) (*Account, error) {
 		RefreshToken: refreshToken,
 	}
 
-	token, err := s.RefreshAccountToken(acc)
+	token, err := s.RefreshAccountToken(acc, "add_refresh_token")
 	if err != nil {
 		return nil, fmt.Errorf("refresh token doğrulanamadı: %w", err)
 	}

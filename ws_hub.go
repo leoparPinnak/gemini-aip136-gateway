@@ -36,6 +36,10 @@ type LiveRequestInfo struct {
 	AssignedAccountName string `json:"assigned_account_name,omitempty"`
 	RoutingRule         string `json:"routing_rule,omitempty"`
 	ErrorMsg            string `json:"error_msg,omitempty"`
+
+	// terminalState, satırın terminal duruma (completed/error/truncated)
+	// ulaştığını işaretler. JSON'a sızmaz; yalnızca ezilme guard'ında kullanılır.
+	terminalState bool
 }
 
 type WSHub struct {
@@ -56,9 +60,19 @@ func (h *WSHub) AddRecentRequest(req LiveRequestInfo) {
 	h.recentMu.Lock()
 	defer h.recentMu.Unlock()
 
+	if req.Status == "completed" || req.Status == "error" || req.Status == "truncated" {
+		req.terminalState = true
+	}
+
 	// Mevcut varsa güncelle
 	for i, r := range h.recentEvents {
 		if r.ID == req.ID {
+			// Yarış guard'ı (A3): BroadcastRequestEvent goroutine'den geldiği için
+			// geç "running" kopyası, tamamlanmış satırı geriye çevirebilir;
+			// terminal durumdaki satır bu nedenle RUNNING ile EZİLEMEZ.
+			if r.terminalState && req.Status == "running" {
+				return
+			}
 			h.recentEvents[i] = req
 			return
 		}

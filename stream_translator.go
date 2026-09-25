@@ -40,6 +40,8 @@ type StreamTranslator struct {
 	pid              int
 	processName      string
 	lastFinishReason string
+	lastTraceID      string // A2: Google'ın döndürdüğü traceId (JSONL korelasyonu)
+	lastUsageRaw     json.RawMessage // A4: son usageMetadata ham (cached==0 analizi)
 	mu               sync.Mutex
 }
 
@@ -121,6 +123,13 @@ func (st *StreamTranslator) sendRawSSE(data string) {
 }
 
 func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
+	// A2: Google traceId / modelVersion yakala (JSONL korelasyonu)
+	if chunk.Response.TraceID != "" {
+		st.lastTraceID = chunk.Response.TraceID
+	} else if chunk.TraceID != "" {
+		st.lastTraceID = chunk.TraceID
+	}
+
 	// Extract usage
 	var usage *GeminiUsageMetadata
 	if chunk.Response.UsageMetadata != nil {
@@ -140,6 +149,11 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 		}
 		if usage.TotalTokenCount > 0 {
 			st.totalTokens = usage.TotalTokenCount
+		}
+		// A4: son usage'ın ham hali — cached==0 satırlarında "gerçek 0" mı
+		// "STOP gelmemiş kayıp 0" mı ayrıştırılır.
+		if raw, err := json.Marshal(usage); err == nil {
+			st.lastUsageRaw = raw
 		}
 	}
 
@@ -397,8 +411,13 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 	}
 }
 
-func (st *StreamTranslator) FinishStream() {
+// FinishStream akışı sonlandırır ve durum rozetini döndürür.
+// true = Google STOP/final finishReason hiç gelmedi (akış koptu) →
+// handler "truncated" yayınlar; usage kaybolmuş olabilir (A4).
+// SSE event şeması DEĞİŞMEZ (istemci uyumu); yalnızca sunucu tarafı işaret.
+func (st *StreamTranslator) FinishStream() bool {
 	fullText := st.fullOutputText.String()
+	truncated := st.lastFinishReason == ""
 
 	// Boş Yanıt Koruma Kalkanı (Empty Content Fallback Shield)
 	// Eğer model ne nihai metin ne de araç/fonksiyon çağrısı ürettiyse (örneğin düşünme bütçesini tüketip durduysa),
@@ -543,6 +562,10 @@ func (st *StreamTranslator) FinishStream() {
 		}
 
 		approxReasoningTokens := len(st.fullThoughtText.String()) / 4
+		respTotalTokens := st.totalTokens
+		if respTotalTokens == 0 {
+			respTotalTokens = st.promptTokens + st.outputTokens
+		}
 
 		st.sendSSE("response.completed", map[string]interface{}{
 			"type": "response.completed",
@@ -554,7 +577,7 @@ func (st *StreamTranslator) FinishStream() {
 				"usage": map[string]interface{}{
 					"input_tokens":  st.promptTokens,
 					"output_tokens": st.outputTokens,
-					"total_tokens":  st.totalTokens,
+					"total_tokens":  respTotalTokens,
 					"input_tokens_details": map[string]interface{}{
 						"cached_tokens": st.cachedTokens,
 					},
@@ -620,4 +643,5 @@ func (st *StreamTranslator) FinishStream() {
 
 		st.sendRawSSE("[DONE]")
 	}
+	return truncated
 }

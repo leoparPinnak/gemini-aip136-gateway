@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/http/httptrace"
 	"strings"
 	"time"
 )
@@ -53,15 +55,31 @@ type GeminiStreamChunk struct {
 		Candidates     []GeminiCandidate     `json:"candidates"`
 		UsageMetadata  *GeminiUsageMetadata  `json:"usageMetadata"`
 		PromptFeedback *GeminiPromptFeedback `json:"promptFeedback"`
+		TraceID        string                `json:"traceId,omitempty"`
+		ModelVersion   string                `json:"modelVersion,omitempty"`
 	} `json:"response"`
 	Candidates     []GeminiCandidate     `json:"candidates"`
 	UsageMetadata  *GeminiUsageMetadata  `json:"usageMetadata"`
 	PromptFeedback *GeminiPromptFeedback `json:"promptFeedback"`
+	TraceID        string                `json:"traceId,omitempty"`
+	ResponseID     string                `json:"responseId,omitempty"`
+	ModelVersion   string                `json:"modelVersion,omitempty"`
 	Error          *struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
 		Status  string `json:"status"`
 	} `json:"error,omitempty"`
+}
+
+// ConnInfo, bir isteğin Google'a giden TCP/TLS bağlantı ölçümüdür (A2).
+// httptrace ile doldurulur; nil ise hiçbir ölçüm yapılmaz.
+// WaitMs: istek gönderildikten GotConn'a kadar geçen süre (bağlantı kurulum
+// veya havuzdan yeniden kullanım gecikmesi — proxy transport havuzu C1 ölçümü).
+type ConnInfo struct {
+	Reused         bool
+	WasIdle        bool
+	WaitMs         int64
+	UpstreamTrace string // yanıt header'ı x-request-id / server-timing
 }
 
 type GeminiClient struct {
@@ -89,12 +107,13 @@ func (c *GeminiClient) StreamGenerateContent(
 	payload *GeminiAipPayload,
 	onChunk func(chunk *GeminiStreamChunk) error,
 ) error {
-	return c.StreamGenerateContentWithAccount(payload, nil, onChunk)
+	return c.StreamGenerateContentWithAccount(payload, nil, nil, onChunk)
 }
 
 func (c *GeminiClient) StreamGenerateContentWithAccount(
 	payload *GeminiAipPayload,
 	acc *Account,
+	ci *ConnInfo,
 	onChunk func(chunk *GeminiStreamChunk) error,
 ) error {
 	var token string
@@ -127,6 +146,20 @@ func (c *GeminiClient) StreamGenerateContentWithAccount(
 	req.Header.Set("X-Goog-Api-Client", "google-cloud-code")
 	req.Header.Set("Accept", "text/event-stream")
 
+	// A2: Bağlantı izi — keep-alive yeniden kullanımı cache affinity hipotezini
+	// ölçmek için şart (proxy transport havuzu C1'den sonra ayrıca okunur).
+	if ci != nil {
+		traceStart := time.Now()
+		trace := &httptrace.ClientTrace{
+			GotConn: func(info httptrace.GotConnInfo) {
+				ci.Reused = info.Reused
+				ci.WasIdle = info.WasIdle
+				ci.WaitMs = time.Since(traceStart).Milliseconds()
+			},
+		}
+		req = req.WithContext(httptrace.WithClientTrace(context.Background(), trace))
+	}
+
 	// 🛡️ Stealth Timing Layer: İnsan benzeri mikro-jitter (15ms - 45ms)
 	// İsteklerin mekanik 0ms aralıklarla değil, doğal insan/ağ varyasyonuyla gitmesini sağlar
 	jitterMs := 15 + rand.Intn(31)
@@ -148,6 +181,14 @@ func (c *GeminiClient) StreamGenerateContentWithAccount(
 	if resp.StatusCode != http.StatusOK {
 		errBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("Google CloudCode API error (HTTP %d): %s", resp.StatusCode, string(errBody))
+	}
+
+	if ci != nil {
+		if t := resp.Header.Get("x-request-id"); t != "" {
+			ci.UpstreamTrace = t
+		} else if t := resp.Header.Get("server-timing"); t != "" {
+			ci.UpstreamTrace = t
+		}
 	}
 
 	reader := bufio.NewReader(resp.Body)

@@ -26,14 +26,16 @@ Standart **OpenAI Chat Completions (`/v1/chat/completions`)** ve yeni nesil **Op
 * Kullanıcının `%LOCALAPPDATA%\antigravity-cli\auth.json` dizinindeki veya Windows Kimlik Deposu'ndaki Google Cloud OAuth2 belirtecini otomatik olarak algılar.
 * Belirteç süresi dolduğunda arka planda Google OAuth2 servislerine sessizce istek atarak yeni erişim belirtecini (access token) yeniler. Harici API anahtarı girmenize gerek kalmaz.
 
-### 4. Enterprise Context Caching (%90+ Hit - 16k-20k Eşiği)
-* Kurumsal Google CloudCode arka ucunun TPU KV önbellekleme eşiği canlı testlerle tespit edilmiştir (~16.000 - 20.000 token).
-* 25.000 tokenlık kurumsal şartname ve bağlam testinde **20.450 tokenlık muazzam bir Cache Hit (`CACHE: 20450 ⚡ HIT!`)** başarıyla doğrulanmıştır.
+### 4. Enterprise Context Caching (Örtük Prompt Cache — Eşik Notları)
+* Google'ın **örtük (implicit) prompt cache** mekanizması kullanılır: `v1internal:streamGenerateContent` istek şemasında `cachedContent` alanı **yoktur**; bu uçtan explicit cache (`cachedContents` + `ttl`) **kullanılamaz**.
+* Resmî eşikler: Gemini **2.5 → 2048**, **3.x → 4096 token**; topluluk ölçümleri gerçek aktivasyonu **4k–12k** bandında raporlamıştır. "16k–20k kurumsal eşik" ifadesinin **resmî kaynağı yoktur**.
+* Kendi canlı testimizde ~20.450 tokenlık bağlamda `Cache: 20450 ⚡ HIT` gözlenmiştir — bu, yüksek tokenlı bağlamlarda HIT'in çalıştığını gösterir; **eşik 16–20k anlamına gelmez**.
+* Örtük cache'in **TTL garantisi yoktur** (Google moderatör tavsiyesi "explicit kullanın" — ancak bu uç explicit desteklemediğinden kararlılık istemci tarafında: sabit `sessionId`, kararlı tool/şema sırası, bayt-bayt aynı medya). Ayrıntı: `0-hit-kok-neden-analizi.md`.
 
 ### 5. Katı Şema Normalizasyonu ve Tool Calling Motoru
 * Google AIP-136 şema doğrulayıcısı küçük harf tipleri (`string`, `object`), `$schema` alanını ve rasgele anahtar dizilimini katı bir şekilde reddeder.
 * Gateway; JSON Schema tanımlarını otomatik olarak büyük harfe (`OBJECT`, `STRING`, `INTEGER` vb.) çevirir, geçersiz meta-verileri süzer ve fonksiyon bildirimlerini **RFC 8785 Canonical JSON** kurallarıyla alfabetik sıralar.
-* Modelin ürettiği kriptografik `thoughtSignature` imzasını bellek içi iş parçacığı güvenli (thread-safe) [`thought_store.go`](file:///C:/Users/metin/Desktop/gemini-aip136-gateway/thought_store.go) ile yöneterek çok turlu araç diyaloglarında hatasız devamlılık sağlar.
+* Modelin ürettiği kriptografik `thoughtSignature` imzasını thread-safe [`thought_store.go`](file:///C:/Users/metin/Desktop/gemini-aip136-gateway/thought_store.go) ile yönetür: anahtarlar namespace'li (`callId:toolName` — global `:toolName` aliası kaldırıldı), çakışmalarda ilk değer korunur, disk yazımı **async + atomiktir** (2 sn debounce, `.tmp` → `Rename`), 30 günlük TTL uygulanır — çok turlu araç diyaloglarında hatasız devamlılık ve tutarlı prefix sağlar.
 
 ### 6. Çok Seviyeli Düşünme (Reasoning Effort) Yönetimi
 Modelin akıl yürütme bütçesini istek parametrelerine göre anlık olarak yapılandırır:
