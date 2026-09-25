@@ -67,8 +67,9 @@ type RequestLogEntry struct {
 	ContentManifest []ContentManifestItem `json:"content_manifest,omitempty"`
 
 	// unexported: miss anında tam dump için (Log() hook'u kullanır)
-	rawBody []byte
-	payload *GeminiAipPayload
+	rawBody    []byte
+	payload    *GeminiAipPayload
+	upHeaders  map[string]string
 }
 
 // ContentManifestItem gönderilen Gemini şablonunun parça özeti.
@@ -165,8 +166,9 @@ func dumpPayloadOnMiss(e *RequestLogEntry) {
 		"session_id": e.SessionID, "pid": e.PID, "status": e.Status,
 		"prompt": e.Prompt, "cached": e.Cached, "sys_hash": e.SysHash, "tools_hash": e.ToolsHash,
 		"up_trace": e.UpstreamTrace, "manifest": e.ContentManifest,
-		"raw_body":         shortB64(e.rawBody),
-		"upstream_payload": shortB64(upRaw),
+		"upstream_headers":     e.upHeaders,
+		"raw_body":             shortB64(e.rawBody),
+		"upstream_payload":     shortB64(upRaw),
 	}
 	b, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
@@ -358,6 +360,7 @@ func attachConn(e *RequestLogEntry, ci *ConnInfo, trace string) {
 	}
 	e.ConnReused = ci.Reused
 	e.ConnWaitMs = ci.WaitMs
+	e.upHeaders = ci.Headers
 	if trace != "" {
 		e.UpstreamTrace = trace
 	} else {

@@ -80,6 +80,7 @@ type ConnInfo struct {
 	WasIdle        bool
 	WaitMs         int64
 	UpstreamTrace string // yanıt header'ı x-request-id / server-timing
+	Headers        map[string]string // tüm yanıt header'ları (miss dump teşhisi)
 }
 
 type GeminiClient struct {
@@ -188,6 +189,14 @@ func (c *GeminiClient) StreamGenerateContentWithAccount(
 			ci.UpstreamTrace = t
 		} else if t := resp.Header.Get("server-timing"); t != "" {
 			ci.UpstreamTrace = t
+		}
+		// cached=0 kök-neden teşhisi: tüm yanıt header'ları dump'a gitsin
+		// (backend/timing sinyalleri aranabilir: x-goog-*, server-timing vs.)
+		ci.Headers = make(map[string]string, len(resp.Header))
+		for k, v := range resp.Header {
+			if len(v) > 0 {
+				ci.Headers[k] = v[0]
+			}
 		}
 	}
 
