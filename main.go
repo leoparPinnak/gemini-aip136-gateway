@@ -614,7 +614,7 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 		reqInfo.ErrorMsg = err.Error()
 		BroadcastRequestEvent(reqInfo)
 
-		le := newReqLogBase(reqID, payload, pid, targetEmail, targetModel, effortStr, "/v1/responses", reqStart)
+		le := newReqLogBase(reqID, payload, body, pid, targetEmail, targetModel, effortStr, "/v1/responses", reqStart)
 		le.Status = "error"
 		le.ErrorMsg = err.Error()
 		if le.Cached == 0 && len(translator.lastUsageRaw) > 0 {
@@ -659,7 +659,7 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[✓ /v1/responses Tamamlandı] PID: %d | Süre: %dms | Prompt: %d | Cache: %d | Output: %d\n",
 		pid, elapsed, translator.promptTokens, translator.cachedTokens, translator.outputTokens)
 
-	le := newReqLogBase(reqID, payload, pid, targetEmail, targetModel, effortStr, "/v1/responses", reqStart)
+	le := newReqLogBase(reqID, payload, body, pid, targetEmail, targetModel, effortStr, "/v1/responses", reqStart)
 	le.Status = "completed"
 	if truncated {
 		le.Status = "truncated"
@@ -799,7 +799,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			reqInfo.ErrorMsg = err.Error()
 			BroadcastRequestEvent(reqInfo)
 
-			le := newReqLogBase(reqID, payload, pid, targetEmail, targetModel, effortStr, "/v1/chat/completions", reqStart)
+			le := newReqLogBase(reqID, payload, body, pid, targetEmail, targetModel, effortStr, "/v1/chat/completions", reqStart)
 			le.Status = "error"
 			le.ErrorMsg = err.Error()
 			if le.Cached == 0 && len(translator.lastUsageRaw) > 0 {
@@ -843,7 +843,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[✓ /v1/chat/completions Tamamlandı] PID: %d | Süre: %dms | Prompt: %d | Cache: %d | Output: %d\n",
 			pid, elapsed, translator.promptTokens, translator.cachedTokens, translator.outputTokens)
 
-		le := newReqLogBase(reqID, payload, pid, targetEmail, targetModel, effortStr, "/v1/chat/completions", reqStart)
+		le := newReqLogBase(reqID, payload, body, pid, targetEmail, targetModel, effortStr, "/v1/chat/completions", reqStart)
 		le.Status = "completed"
 		if truncated {
 			le.Status = "truncated"
@@ -926,7 +926,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			reqInfo.ErrorMsg = err.Error()
 			BroadcastRequestEvent(reqInfo)
 
-			le := newReqLogBase(reqID, payload, pid, targetEmail, targetModel, effortStr, "/v1/chat/completions", reqStart)
+			le := newReqLogBase(reqID, payload, body, pid, targetEmail, targetModel, effortStr, "/v1/chat/completions", reqStart)
 			le.Status = "error"
 			le.ErrorMsg = err.Error()
 			if usage != nil {
@@ -975,7 +975,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		reqInfo.CacheHit = cachedTokens > 0
 		BroadcastRequestEvent(reqInfo)
 
-		le := newReqLogBase(reqID, payload, pid, targetEmail, targetModel, effortStr, "/v1/chat/completions", reqStart)
+		le := newReqLogBase(reqID, payload, body, pid, targetEmail, targetModel, effortStr, "/v1/chat/completions", reqStart)
 		le.Status = "completed"
 		le.Prompt = promptTokens
 		le.Cached = cachedTokens

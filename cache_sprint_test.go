@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -318,6 +319,57 @@ func TestProxyTransportReuse(t *testing.T) {
 	c4 := m.GetHttpClientForProxy("yok", time.Second)
 	if _, isTr := c4.Transport.(*http.Transport); isTr {
 		t.Errorf("bilinmeyen proxy havuza düşmemeli")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Hibrit içerik loglama: manifest + base64 kısaltma
+// ---------------------------------------------------------------------------
+
+func TestShortB64ReplacesLongBase64(t *testing.T) {
+	long := strings.Repeat("aGVsbG8gd29ybGQg", 40) // 640 karakter base64'e benzer
+	in := `{"data":"` + long + `","text":"kısa metin"}`
+	out := shortB64([]byte(in))
+	if strings.Contains(out, long) {
+		t.Errorf("uzun base64 kısaltılmamış")
+	}
+	if !strings.Contains(out, "<b64:len=640:sha256=") {
+		t.Errorf("kısaltma damgası yok: %s", out[:200])
+	}
+	if !strings.Contains(out, "kısa metin") {
+		t.Errorf("normal metin bozulmamalı")
+	}
+}
+
+func TestBuildContentManifest(t *testing.T) {
+	p := &GeminiAipPayload{Request: GeminiInnerRequest{Contents: []GeminiContent{
+		{Role: "user", Parts: []GeminiPart{
+			{Text: "merhaba dünya"},
+			{InlineData: &GeminiInlineData{MimeType: "image/png", Data: "QUFBQQ=="}},
+		}},
+		{Role: "model", Parts: []GeminiPart{
+			{FunctionCall: &GeminiFunctionCall{Name: "run", Args: map[string]interface{}{"cmd": "ls"}}},
+		}},
+	}}}
+	m := BuildContentManifest(p)
+	if len(m) != 3 {
+		t.Fatalf("parça sayısı: %d", len(m))
+	}
+	if m[0].Type != "text" || m[0].Role != "user" || m[0].Len != len("merhaba dünya") || m[0].Sha == "" {
+		t.Errorf("text manifest hatalı: %+v", m[0])
+	}
+	if m[1].Type != "media" || m[1].Mime != "image/png" || m[1].Sha != hash12("QUFBQQ==") {
+		t.Errorf("media manifest hatalı: %+v", m[1])
+	}
+	if m[2].Type != "fc" || m[2].Role != "model" || m[2].Sha == "" {
+		t.Errorf("fc manifest hatalı: %+v", m[2])
+	}
+	// determinizm: iki çağrı aynı manifesti üretmeli
+	m2 := BuildContentManifest(p)
+	b1, _ := json.Marshal(m)
+	b2, _ := json.Marshal(m2)
+	if !bytes.Equal(b1, b2) {
+		t.Errorf("manifest deterministik değil")
 	}
 }
 
