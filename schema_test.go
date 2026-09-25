@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -172,4 +174,95 @@ func TestEndingWithModelTurnGuards(t *testing.T) {
 		t.Errorf("FAIL Scenario 3: Expected first turn role 'user', got '%s'", first3.Role)
 	}
 }
+
+type mockResponseWriter struct {
+	header http.Header
+	buf    strings.Builder
+}
+
+func (m *mockResponseWriter) Header() http.Header {
+	if m.header == nil {
+		m.header = make(http.Header)
+	}
+	return m.header
+}
+func (m *mockResponseWriter) Write(p []byte) (int, error) {
+	return m.buf.Write(p)
+}
+func (m *mockResponseWriter) WriteHeader(statusCode int) {}
+func (m *mockResponseWriter) Flush()                     {}
+
+func TestStreamTranslatorEmptyFallback(t *testing.T) {
+	// Scenario 1: Responses API with thought only (no output_text, no tool_calls)
+	w1 := &mockResponseWriter{}
+	st1 := NewStreamTranslator(w1, true, "gemini-3.8-flash-high")
+	st1.HandleGeminiChunk(&GeminiStreamChunk{
+		Candidates: []GeminiCandidate{
+			{
+				Content: GeminiCandidateContent{
+					Parts: []GeminiCandidatePart{
+						{
+							Thought: true,
+							Text:    "Thinking deeply about the universe...",
+						},
+					},
+				},
+			},
+		},
+	})
+	st1.FinishStream()
+
+	out1 := w1.buf.String()
+	if !strings.Contains(out1, "Bilgilendirme: Model düşünme/akıl yürütme sürecini tamamladı") {
+		t.Errorf("Expected informational notice in SSE, got: %s", out1)
+	}
+	if !strings.Contains(out1, "response.output_item.done") {
+		t.Errorf("Expected response.output_item.done to be emitted, got: %s", out1)
+	}
+	if !strings.Contains(out1, "response.completed") {
+		t.Errorf("Expected response.completed to be emitted, got: %s", out1)
+	}
+	if st1.fullOutputText.Len() == 0 {
+		t.Errorf("Expected st1.fullOutputText to be populated by fallback shield")
+	}
+
+	// Scenario 2: Chat completions with completely empty response (no thought, no text)
+	w2 := &mockResponseWriter{}
+	st2 := NewStreamTranslator(w2, false, "gemini-3.8-flash-high")
+	st2.FinishStream()
+
+	out2 := w2.buf.String()
+	if !strings.Contains(out2, "Bilgilendirme: Model herhangi bir yanıt çıktısı") {
+		t.Errorf("Expected empty response notice in chat completion SSE, got: %s", out2)
+	}
+	if !strings.Contains(out2, "[DONE]") {
+		t.Errorf("Expected [DONE] at end of stream, got: %s", out2)
+	}
+
+	// Scenario 3: Has function call but no text -> fallback should NOT trigger
+	w3 := &mockResponseWriter{}
+	st3 := NewStreamTranslator(w3, true, "gemini-3.8-flash-high")
+	st3.HandleGeminiChunk(&GeminiStreamChunk{
+		Candidates: []GeminiCandidate{
+			{
+				Content: GeminiCandidateContent{
+					Parts: []GeminiCandidatePart{
+						{
+							FunctionCall: &GeminiFunctionCall{
+								Name: "read_file",
+								Args: map[string]interface{}{"path": "test.txt"},
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+	st3.FinishStream()
+
+	if st3.fullOutputText.Len() > 0 {
+		t.Errorf("Fallback should NOT trigger when function call is present, got output: %s", st3.fullOutputText.String())
+	}
+}
+
 

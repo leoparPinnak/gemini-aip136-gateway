@@ -969,25 +969,51 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 	// Final System Prompt: Sadece istekte sistem istemi varsa iletilir (Harici hiçbir enjeksiyon yapılmaz)
 	finalSystemPrompt := extractedSystemPrompt
 
-	// Reasoning Effort: 4 Farklı Mod
-	// 1. high: thinkingBudget = -1, includeThoughts = true
-	// 2. low: thinkingBudget = -1, includeThoughts = true (veya model low seçilebilir)
-	// 3. off: thinkingBudget = 0, includeThoughts = false
-	// 4. dynamic / auto: reasoning bloğu yoksa thinkingConfig gönderilmez veya varsayılan bırakılır
-	hasReasoningConfig := false
+	// Target Model: İstekten gelen modele sadık kal, belirtilmemişse varsayılan gemini-3.8-flash-medium
+	reqModel, _ := body["model"].(string)
+	reqModelLower := strings.ToLower(strings.TrimSpace(reqModel))
+	targetModel := "gemini-3.8-flash-medium"
+
+	isNoThinking := strings.Contains(reqModelLower, "nothink") ||
+		strings.Contains(reqModelLower, "no-think") ||
+		strings.Contains(reqModelLower, "no_think") ||
+		strings.Contains(reqModelLower, "-off")
+
+	if isNoThinking {
+		targetModel = "gemini-3.8-flash-medium"
+	} else if strings.Contains(reqModelLower, "flash-high") || strings.Contains(reqModelLower, "high") {
+		targetModel = "gemini-3.8-flash-high"
+	} else if strings.Contains(reqModelLower, "flash-low") || strings.Contains(reqModelLower, "low") {
+		targetModel = "gemini-3.8-flash-low"
+	} else if strings.Contains(reqModelLower, "flash-medium") || strings.Contains(reqModelLower, "medium") {
+		targetModel = "gemini-3.8-flash-medium"
+	} else if reqModelLower != "" {
+		targetModel = reqModel
+	}
+
+	// Model adından reasoning effort çıkarımı (-high, -medium, -low, nothinking):
+	inferredEffort := ""
+	if isNoThinking {
+		inferredEffort = "off"
+	} else if strings.Contains(reqModelLower, "high") {
+		inferredEffort = "high"
+	} else if strings.Contains(reqModelLower, "low") {
+		inferredEffort = "low"
+	} else if strings.Contains(reqModelLower, "medium") {
+		inferredEffort = "medium"
+	}
+
+	// Reasoning Effort: İstekten gelen parametreleri çöz
 	effort := ""
 	if r, ok := body["reasoning"].(map[string]interface{}); ok {
-		hasReasoningConfig = true
 		if eff, ok := r["effort"].(string); ok && eff != "" {
 			effort = strings.ToLower(strings.TrimSpace(eff))
 		}
 	} else if eff, ok := body["reasoning_effort"].(string); ok && eff != "" {
-		hasReasoningConfig = true
 		effort = strings.ToLower(strings.TrimSpace(eff))
 	}
 
 	if th, ok := body["thinking"].(map[string]interface{}); ok {
-		hasReasoningConfig = true
 		if tType, ok := th["type"].(string); ok && tType == "disabled" {
 			effort = "off"
 		}
@@ -1004,22 +1030,19 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 	}
 	if maxTokens < 128 {
 		effort = "off"
-		hasReasoningConfig = true
 	}
 
-	// Target Model: İstekten gelen modele sadık kal, belirtilmemişse varsayılan gemini-3.8-flash-medium
-	reqModel, _ := body["model"].(string)
-	reqModelLower := strings.ToLower(strings.TrimSpace(reqModel))
-	targetModel := "gemini-3.8-flash-medium"
-
-	if strings.Contains(reqModelLower, "flash-high") {
-		targetModel = "gemini-3.8-flash-high"
-	} else if strings.Contains(reqModelLower, "flash-low") {
-		targetModel = "gemini-3.8-flash-low"
-	} else if strings.Contains(reqModelLower, "flash-medium") {
-		targetModel = "gemini-3.8-flash-medium"
-	} else if reqModelLower != "" {
-		targetModel = reqModel
+	// 🧠 AKILLI DÜŞÜNME MODU ÇÖZÜMLEME:
+	// Eğer model adında seviye belirtilmişse (örn: gemini-3.8-flash-high veya nothinking),
+	// modelin kimliğindeki seviye önceliklidir.
+	if inferredEffort != "" {
+		effort = inferredEffort
+	} else if effort == "" {
+		// Model adında seviye yoksa ve reasoning parametresi verilmemişse, Gemini 3.8 / 2.5 için
+		// düşünmeyi varsayılan olarak açık tut (medium).
+		if strings.Contains(targetModel, "gemini-3.8") || strings.Contains(targetModel, "gemini-2.5") {
+			effort = "medium"
+		}
 	}
 
 	// ⚡ DASHBOARD OVERRIDE KONTROLÜ:
@@ -1032,29 +1055,23 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 			}
 			if ov.ThinkingEffort != "" {
 				effort = ov.ThinkingEffort
-				hasReasoningConfig = true
 			}
 		}
 	}
 
 	// 4 Düşünme Modunun Yapılandırılması:
 	var thinkingConfig *GeminiThinkingConfig
-	if hasReasoningConfig && effort != "" && effort != "auto" && effort != "dynamic" {
-		if effort == "off" || effort == "none" || effort == "disabled" {
-			thinkingConfig = &GeminiThinkingConfig{
-				IncludeThoughts: false,
-				ThinkingBudget:  0,
-			}
-		} else {
-			// high, medium, low
-			thinkingConfig = &GeminiThinkingConfig{
-				IncludeThoughts: true,
-				ThinkingBudget:  -1,
-			}
+	if effort == "off" || effort == "none" || effort == "disabled" {
+		thinkingConfig = &GeminiThinkingConfig{
+			IncludeThoughts: false,
+			ThinkingBudget:  0,
 		}
 	} else {
-		// Dinamik Düşünme (Varsayılan / Modelin Serbest Kararı): reasoning bloğu yoksa thinkingConfig eklenmez
-		thinkingConfig = nil
+		// high, medium, low veya modelin varsayılan düşünmesi
+		thinkingConfig = &GeminiThinkingConfig{
+			IncludeThoughts: true,
+			ThinkingBudget:  -1,
+		}
 	}
 
 	// Tools conversion

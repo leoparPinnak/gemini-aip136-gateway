@@ -46,20 +46,22 @@ type ProcessDetail struct {
 }
 
 type ProcessInspector struct {
-	portToPID  map[int]int
-	pidToInfo  map[int]*ProcessDetail
-	detected   map[int]*ProcessDetail
-	mu         sync.RWMutex
-	lastUpdate time.Time
+	gatewayPort int
+	portToPID   map[int]int
+	pidToInfo   map[int]*ProcessDetail
+	detected    map[int]*ProcessDetail
+	mu          sync.RWMutex
+	lastUpdate  time.Time
 }
 
 var GlobalProcessInspector *ProcessInspector
 
-func InitProcessInspector() {
+func InitProcessInspector(gatewayPort int) {
 	inspector := &ProcessInspector{
-		portToPID: make(map[int]int),
-		pidToInfo: make(map[int]*ProcessDetail),
-		detected:  make(map[int]*ProcessDetail),
+		gatewayPort: gatewayPort,
+		portToPID:   make(map[int]int),
+		pidToInfo:   make(map[int]*ProcessDetail),
+		detected:    make(map[int]*ProcessDetail),
 	}
 	GlobalProcessInspector = inspector
 
@@ -107,7 +109,8 @@ func getNativeProcessExeName(pid uint32) string {
 }
 
 // scanTCPTableFast doğrudan bellekten IPv4 ve IPv6 soket haritasını okur (0.5ms).
-func scanTCPTableFast() map[int]int {
+// Sadece targetPort (Gateway portu, örn: 8000) hedefine bağlı yerel istemcileri tarar.
+func scanTCPTableFast(targetPort int) map[int]int {
 	myPid := uint32(os.Getpid())
 	result := make(map[int]int)
 
@@ -122,7 +125,24 @@ func scanTCPTableFast() map[int]int {
 			offset := 4
 			for i := uint32(0); i < numEntries && offset+24 <= len(buf); i++ {
 				localPort := int(binary.BigEndian.Uint16(buf[offset+8 : offset+10]))
+				remotePort := int(binary.BigEndian.Uint16(buf[offset+16 : offset+18]))
 				pid := binary.LittleEndian.Uint32(buf[offset+20 : offset+24])
+
+				// Hedef port Gateway portuyla eşleşmeli
+				if targetPort > 0 && remotePort != targetPort {
+					offset += 24
+					continue
+				}
+
+				// Bağlantının yerel (loopback 127.x.x.x veya yerel makine) olduğunu doğrula.
+				// Böylece dış proxy veya sunuculara (örn: 185.x.x.x:8000) bağlanan alakasız süreçler elenir.
+				isLoopback := buf[offset+12] == 127
+				isLocalMatch := bytes.Equal(buf[offset+4:offset+8], buf[offset+12:offset+16])
+				if !isLoopback && !isLocalMatch {
+					offset += 24
+					continue
+				}
+
 				if pid > 0 && pid != myPid {
 					result[localPort] = int(pid)
 				}
@@ -142,7 +162,25 @@ func scanTCPTableFast() map[int]int {
 			offset := 4
 			for i := uint32(0); i < numEntries && offset+56 <= len(buf); i++ {
 				localPort := int(binary.BigEndian.Uint16(buf[offset+20 : offset+22]))
+				remotePort := int(binary.BigEndian.Uint16(buf[offset+44 : offset+46]))
 				pid := binary.LittleEndian.Uint32(buf[offset+52 : offset+56])
+
+				// Hedef port Gateway portuyla eşleşmeli
+				if targetPort > 0 && remotePort != targetPort {
+					offset += 56
+					continue
+				}
+
+				// IPv6 loopback (::1) veya yerel adres eşleşmesi
+				ucLocalAddr := buf[offset : offset+16]
+				ucRemoteAddr := buf[offset+24 : offset+40]
+				isIPv6Loopback := bytes.Equal(ucRemoteAddr, net.IPv6loopback)
+				isLocalMatch := bytes.Equal(ucLocalAddr, ucRemoteAddr)
+				if !isIPv6Loopback && !isLocalMatch {
+					offset += 56
+					continue
+				}
+
 				if pid > 0 && pid != myPid {
 					result[localPort] = int(pid)
 				}
@@ -155,11 +193,9 @@ func scanTCPTableFast() map[int]int {
 }
 
 func (pi *ProcessInspector) refreshTables() {
-	newMap := scanTCPTableFast()
+	newMap := scanTCPTableFast(pi.gatewayPort)
 	pi.mu.Lock()
-	for p, pid := range newMap {
-		pi.portToPID[p] = pid
-	}
+	pi.portToPID = newMap
 	pi.lastUpdate = time.Now()
 	pi.mu.Unlock()
 }
@@ -184,7 +220,7 @@ func (pi *ProcessInspector) RegisterSocket(remoteAddr string) {
 	}
 
 	// Anında native tabloyu tara
-	fastMap := scanTCPTableFast()
+	fastMap := scanTCPTableFast(pi.gatewayPort)
 	if pid, ok := fastMap[port]; ok && pid > 0 {
 		pi.mu.Lock()
 		pi.portToPID[port] = pid
@@ -287,7 +323,7 @@ func (pi *ProcessInspector) ResolveClientProcess(remoteAddr string) (int, string
 
 	if !ok || pid == 0 {
 		// Anlık native tarama yap (0.2ms)
-		fastMap := scanTCPTableFast()
+		fastMap := scanTCPTableFast(pi.gatewayPort)
 		if foundPid, found := fastMap[port]; found && foundPid > 0 {
 			pid = foundPid
 			pi.mu.Lock()

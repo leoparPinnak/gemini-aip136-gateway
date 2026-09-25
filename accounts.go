@@ -436,9 +436,9 @@ func (s *AccountStore) RefreshAccountToken(acc *Account) (string, error) {
 
 	var client *http.Client
 	if acc != nil && acc.ProxyID != "" && GlobalProxyManager != nil {
-		client = GlobalProxyManager.GetHttpClientForProxy(acc.ProxyID, 15*time.Second)
+		client = GlobalProxyManager.GetHttpClientForProxy(acc.ProxyID, 35*time.Second)
 	} else {
-		client = &http.Client{Timeout: 15 * time.Second}
+		client = &http.Client{Timeout: 35 * time.Second}
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -511,9 +511,9 @@ func (s *AccountStore) RefreshAccountQuota(id string) (*AccountQuota, error) {
 
 	var client *http.Client
 	if acc != nil && acc.ProxyID != "" && GlobalProxyManager != nil {
-		client = GlobalProxyManager.GetHttpClientForProxy(acc.ProxyID, 15*time.Second)
+		client = GlobalProxyManager.GetHttpClientForProxy(acc.ProxyID, 35*time.Second)
 	} else {
-		client = &http.Client{Timeout: 15 * time.Second}
+		client = &http.Client{Timeout: 35 * time.Second}
 	}
 	resp, err := client.Do(req)
 	if err != nil {

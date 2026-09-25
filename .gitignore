@@ -12,7 +12,12 @@ oauth_sessions.json
 override_settings.json
 program_rules.json
 thought_signatures.json
+thought_signatures.json.corrupt-*
 proxies.json
+sessions.json
+
+# Cache-sprint logları (request_logger)
+logs/
 
 # OS generated files
 Thumbs.db

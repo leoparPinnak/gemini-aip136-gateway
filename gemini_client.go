@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -42,13 +43,25 @@ type GeminiUsageMetadata struct {
 	CachedContentTokenCount int `json:"cachedContentTokenCount"`
 }
 
+type GeminiPromptFeedback struct {
+	BlockReason        string `json:"blockReason,omitempty"`
+	BlockReasonMessage string `json:"blockReasonMessage,omitempty"`
+}
+
 type GeminiStreamChunk struct {
 	Response struct {
-		Candidates    []GeminiCandidate    `json:"candidates"`
-		UsageMetadata *GeminiUsageMetadata `json:"usageMetadata"`
+		Candidates     []GeminiCandidate     `json:"candidates"`
+		UsageMetadata  *GeminiUsageMetadata  `json:"usageMetadata"`
+		PromptFeedback *GeminiPromptFeedback `json:"promptFeedback"`
 	} `json:"response"`
-	Candidates    []GeminiCandidate    `json:"candidates"`
-	UsageMetadata *GeminiUsageMetadata `json:"usageMetadata"`
+	Candidates     []GeminiCandidate     `json:"candidates"`
+	UsageMetadata  *GeminiUsageMetadata  `json:"usageMetadata"`
+	PromptFeedback *GeminiPromptFeedback `json:"promptFeedback"`
+	Error          *struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Status  string `json:"status"`
+	} `json:"error,omitempty"`
 }
 
 type GeminiClient struct {
@@ -62,9 +75,11 @@ var GlobalGeminiClient = &GeminiClient{
 				MinVersion: tls.VersionTLS12,
 			},
 			ForceAttemptHTTP2:   true,
-			MaxIdleConns:        100,
+			MaxIdleConns:        200,
+			MaxIdleConnsPerHost: 50,
+			MaxConnsPerHost:     100,
 			IdleConnTimeout:     90 * time.Second,
-			TLSHandshakeTimeout: 10 * time.Second,
+			TLSHandshakeTimeout: 15 * time.Second,
 		},
 		Timeout: 5 * time.Minute,
 	},
@@ -155,6 +170,21 @@ func (c *GeminiClient) StreamGenerateContentWithAccount(
 			var chunk GeminiStreamChunk
 			if err := json.Unmarshal([]byte(dataStr), &chunk); err != nil {
 				continue
+			}
+
+			if chunk.Error != nil {
+				log.Printf("[❌ Google CloudCode Stream Hatası]: Kod: %d, Mesaj: %s, Durum: %s\n",
+					chunk.Error.Code, chunk.Error.Message, chunk.Error.Status)
+				return fmt.Errorf("Google CloudCode stream error (%d - %s): %s", chunk.Error.Code, chunk.Error.Status, chunk.Error.Message)
+			}
+
+			feedback := chunk.Response.PromptFeedback
+			if feedback == nil {
+				feedback = chunk.PromptFeedback
+			}
+			if feedback != nil && feedback.BlockReason != "" {
+				log.Printf("[🚫 Google Prompt Filtresi]: İstek Google tarafından engellendi: %s (%s)\n",
+					feedback.BlockReason, feedback.BlockReasonMessage)
 			}
 
 			if err := onChunk(&chunk); err != nil {

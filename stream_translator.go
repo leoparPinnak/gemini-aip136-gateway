@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -16,23 +17,30 @@ type StreamTranslator struct {
 	isResponsesAPI bool
 	modelName      string
 
-	responseID   string
-	outputItemID string
-	callItemID   string
+	responseID          string
+	outputItemID        string
+	reasoningItemID     string
+	callItemID          string
 
-	hasStartedItem   bool
-	hasEmittedHeader bool
-	fullOutputText   strings.Builder
-	fullThoughtText  strings.Builder
-	activeFnCalls    []map[string]interface{}
+	hasStartedReasoning  bool
+	hasEndedReasoning    bool
+	hasStartedItem       bool
+	hasEmittedHeader     bool
+	reasoningOutputIndex int
+	textOutputIndex      int
+	nextOutputIndex      int
+	fullOutputText       strings.Builder
+	fullThoughtText      strings.Builder
+	activeFnCalls        []map[string]interface{}
 
 	promptTokens   int
 	outputTokens   int
 	cachedTokens   int
 	totalTokens    int
-	pid            int
-	processName    string
-	mu             sync.Mutex
+	pid              int
+	processName      string
+	lastFinishReason string
+	mu               sync.Mutex
 }
 
 func NewStreamTranslator(w http.ResponseWriter, isResponsesAPI bool, modelName string, ctx ...ProtocolContext) *StreamTranslator {
@@ -48,15 +56,38 @@ func NewStreamTranslator(w http.ResponseWriter, isResponsesAPI bool, modelName s
 	}
 
 	return &StreamTranslator{
-		w:              w,
-		flusher:        flusher,
-		isResponsesAPI: isResponsesAPI,
-		modelName:      modelName,
-		pid:            pid,
-		processName:    procName,
-		responseID:     fmt.Sprintf("resp_%d_%s", timestamp, randSuffix),
-		outputItemID:   fmt.Sprintf("msg_%d_%s", timestamp, randSuffix),
-		callItemID:     fmt.Sprintf("fc_%d_%s", timestamp, randSuffix),
+		w:               w,
+		flusher:         flusher,
+		isResponsesAPI:  isResponsesAPI,
+		modelName:       modelName,
+		pid:             pid,
+		processName:     procName,
+		responseID:      fmt.Sprintf("resp_%d_%s", timestamp, randSuffix),
+		outputItemID:    fmt.Sprintf("msg_%d_%s", timestamp, randSuffix),
+		reasoningItemID: fmt.Sprintf("rs_%d_%s", timestamp, randSuffix),
+		callItemID:      fmt.Sprintf("fc_%d_%s", timestamp, randSuffix),
+	}
+}
+
+func (st *StreamTranslator) ensureReasoningEnded() {
+	if st.isResponsesAPI && st.hasStartedReasoning && !st.hasEndedReasoning {
+		st.hasEndedReasoning = true
+		st.sendSSE("response.output_item.done", map[string]interface{}{
+			"type":         "response.output_item.done",
+			"response_id":  st.responseID,
+			"output_index": st.reasoningOutputIndex,
+			"item": map[string]interface{}{
+				"id":     st.reasoningItemID,
+				"type":   "reasoning",
+				"status": "completed",
+				"content": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": st.fullThoughtText.String(),
+					},
+				},
+			},
+		})
 	}
 }
 
@@ -124,6 +155,13 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 	}
 
 	cand := candidates[0]
+	if cand.FinishReason != "" {
+		st.lastFinishReason = cand.FinishReason
+		if cand.FinishReason != "STOP" {
+			log.Printf("[ℹ️ Google FinishReason]: PID: %d (%s) | Model: %s -> FinishReason: %s\n",
+				st.pid, st.processName, st.modelName, cand.FinishReason)
+		}
+	}
 	for _, part := range cand.Content.Parts {
 		// 1. Thought / Reasoning
 		if part.Thought && part.Text != "" {
@@ -142,11 +180,27 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 						},
 					})
 				}
+				if !st.hasStartedReasoning {
+					st.hasStartedReasoning = true
+					st.reasoningOutputIndex = st.nextOutputIndex
+					st.nextOutputIndex++
+					st.sendSSE("response.output_item.added", map[string]interface{}{
+						"type":         "response.output_item.added",
+						"response_id":  st.responseID,
+						"output_index": st.reasoningOutputIndex,
+						"item": map[string]interface{}{
+							"id":     st.reasoningItemID,
+							"type":   "reasoning",
+							"status": "in_progress",
+						},
+					})
+				}
 				st.sendSSE("response.reasoning_text.delta", map[string]interface{}{
-					"type":        "response.reasoning_text.delta",
-					"response_id": st.responseID,
-					"item_id":     st.outputItemID,
-					"delta":       part.Text,
+					"type":         "response.reasoning_text.delta",
+					"response_id":  st.responseID,
+					"item_id":      st.reasoningItemID,
+					"output_index": st.reasoningOutputIndex,
+					"delta":        part.Text,
 				})
 			} else {
 				st.sendSSE("", map[string]interface{}{
@@ -169,6 +223,7 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 
 		// 2. Output Text
 		if part.Text != "" {
+			st.ensureReasoningEnded()
 			st.fullOutputText.WriteString(part.Text)
 
 			if st.isResponsesAPI {
@@ -187,9 +242,12 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 
 				if !st.hasStartedItem {
 					st.hasStartedItem = true
+					st.textOutputIndex = st.nextOutputIndex
+					st.nextOutputIndex++
 					st.sendSSE("response.output_item.added", map[string]interface{}{
-						"type":        "response.output_item.added",
-						"response_id": st.responseID,
+						"type":         "response.output_item.added",
+						"response_id":  st.responseID,
+						"output_index": st.textOutputIndex,
 						"item": map[string]interface{}{
 							"id":      st.outputItemID,
 							"type":    "message",
@@ -201,10 +259,11 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 				}
 
 				st.sendSSE("response.output_text.delta", map[string]interface{}{
-					"type":        "response.output_text.delta",
-					"response_id": st.responseID,
-					"item_id":     st.outputItemID,
-					"delta":       part.Text,
+					"type":         "response.output_text.delta",
+					"response_id":  st.responseID,
+					"item_id":      st.outputItemID,
+					"output_index": st.textOutputIndex,
+					"delta":        part.Text,
 				})
 			} else {
 				st.sendSSE("", map[string]interface{}{
@@ -227,6 +286,7 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 
 		// 3. Function Call
 		if part.FunctionCall != nil {
+			st.ensureReasoningEnded()
 			fn := part.FunctionCall
 			callID := fn.ID
 			if callID == "" {
@@ -260,9 +320,13 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 			})
 
 			if st.isResponsesAPI {
+				fnOutputIdx := st.nextOutputIndex
+				st.nextOutputIndex++
+
 				st.sendSSE("response.output_item.added", map[string]interface{}{
-					"type":        "response.output_item.added",
-					"response_id": st.responseID,
+					"type":         "response.output_item.added",
+					"response_id":  st.responseID,
+					"output_index": fnOutputIdx,
 					"item": map[string]interface{}{
 						"id":      callID,
 						"type":    "function_call",
@@ -273,24 +337,27 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 				})
 
 				st.sendSSE("response.function_call_arguments.delta", map[string]interface{}{
-					"type":        "response.function_call_arguments.delta",
-					"response_id": st.responseID,
-					"item_id":     callID,
-					"call_id":     callID,
-					"delta":       argsStr,
+					"type":         "response.function_call_arguments.delta",
+					"response_id":  st.responseID,
+					"output_index": fnOutputIdx,
+					"item_id":      callID,
+					"call_id":      callID,
+					"delta":        argsStr,
 				})
 
 				st.sendSSE("response.function_call_arguments.done", map[string]interface{}{
-					"type":        "response.function_call_arguments.done",
-					"response_id": st.responseID,
-					"item_id":     callID,
-					"call_id":     callID,
-					"arguments":   argsStr,
+					"type":         "response.function_call_arguments.done",
+					"response_id":  st.responseID,
+					"output_index": fnOutputIdx,
+					"item_id":      callID,
+					"call_id":      callID,
+					"arguments":    argsStr,
 				})
 
 				st.sendSSE("response.output_item.done", map[string]interface{}{
-					"type":        "response.output_item.done",
-					"response_id": st.responseID,
+					"type":         "response.output_item.done",
+					"response_id":  st.responseID,
+					"output_index": fnOutputIdx,
 					"item": map[string]interface{}{
 						"id":        callID,
 						"type":      "function_call",
@@ -331,14 +398,96 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 }
 
 func (st *StreamTranslator) FinishStream() {
+	fullText := st.fullOutputText.String()
+
+	// Boş Yanıt Koruma Kalkanı (Empty Content Fallback Shield)
+	// Eğer model ne nihai metin ne de araç/fonksiyon çağrısı ürettiyse (örneğin düşünme bütçesini tüketip durduysa),
+	// istemcinin "completed response with no content" hatasıyla çökmesini engellemek için fallback içeriği enjekte et.
+	if fullText == "" && len(st.activeFnCalls) == 0 {
+		thought := strings.TrimSpace(st.fullThoughtText.String())
+		var fallbackText string
+		if thought != "" {
+			fallbackText = "*(Bilgilendirme: Model düşünme/akıl yürütme sürecini tamamladı ancak nihai bir yanıt metni veya araç çağrısı üretmeden oturumu sonlandırdı. Lütfen işlemi sürdürmek için 'Devam et' yazın.)*"
+		} else if st.lastFinishReason != "" && st.lastFinishReason != "STOP" {
+			fallbackText = fmt.Sprintf("*(Bilgilendirme: Model yanıt üretemedi. Google sonlandırma nedeni: '%s'. Lütfen bağlamı daraltıp 'Devam et' yazın.)*", st.lastFinishReason)
+		} else {
+			fallbackText = "*(Bilgilendirme: Model herhangi bir yanıt çıktısı veya araç çağrısı üretmeden oturumu tamamladı (Google sunucu zaman aşımı veya boş akış). Lütfen işlemi sürdürmek için 'Devam et' yazın veya Pro modele geçin.)*"
+		}
+
+		log.Printf("[⚠️ Gateway Fallback] Model '%s' (PID: %d, %s) boş yanıt döndü. Boş yanıt koruma kalkanı devreye girdi (%d karakter).\n",
+			st.modelName, st.pid, st.processName, len(fallbackText))
+
+		fullText = fallbackText
+		st.fullOutputText.WriteString(fallbackText)
+		if st.outputTokens == 0 {
+			st.outputTokens = len(fallbackText) / 4
+			if st.outputTokens < 1 {
+				st.outputTokens = 1
+			}
+		}
+
+		if st.isResponsesAPI {
+			if !st.hasEmittedHeader {
+				st.hasEmittedHeader = true
+				st.sendSSE("response.created", map[string]interface{}{
+					"type":        "response.created",
+					"response_id": st.responseID,
+					"response": map[string]interface{}{
+						"id":     st.responseID,
+						"status": "in_progress",
+						"model":  st.modelName,
+					},
+				})
+			}
+
+			if !st.hasStartedItem {
+				st.hasStartedItem = true
+				st.sendSSE("response.output_item.added", map[string]interface{}{
+					"type":        "response.output_item.added",
+					"response_id": st.responseID,
+					"item": map[string]interface{}{
+						"id":      st.outputItemID,
+						"type":    "message",
+						"status":  "in_progress",
+						"role":    "assistant",
+						"content": []interface{}{},
+					},
+				})
+			}
+
+			st.sendSSE("response.output_text.delta", map[string]interface{}{
+				"type":        "response.output_text.delta",
+				"response_id": st.responseID,
+				"item_id":     st.outputItemID,
+				"delta":       fallbackText,
+			})
+		} else {
+			st.sendSSE("", map[string]interface{}{
+				"id":      st.responseID,
+				"object":  "chat.completion.chunk",
+				"created": time.Now().Unix(),
+				"model":   st.modelName,
+				"choices": []map[string]interface{}{
+					{
+						"index": 0,
+						"delta": map[string]interface{}{
+							"content": fallbackText,
+						},
+					},
+				},
+			})
+		}
+	}
+
 	if st.isResponsesAPI {
-		fullText := st.fullOutputText.String()
+		st.ensureReasoningEnded()
 
 		// Crucial fix for DSH: output_item.done MUST contain the accumulated output_text!
 		if fullText != "" || st.hasStartedItem {
 			st.sendSSE("response.output_item.done", map[string]interface{}{
-				"type":        "response.output_item.done",
-				"response_id": st.responseID,
+				"type":         "response.output_item.done",
+				"response_id":  st.responseID,
+				"output_index": st.textOutputIndex,
 				"item": map[string]interface{}{
 					"id":     st.outputItemID,
 					"type":   "message",
@@ -355,6 +504,19 @@ func (st *StreamTranslator) FinishStream() {
 		}
 
 		var outputList []map[string]interface{}
+		if st.hasStartedReasoning {
+			outputList = append(outputList, map[string]interface{}{
+				"id":     st.reasoningItemID,
+				"type":   "reasoning",
+				"status": "completed",
+				"content": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": st.fullThoughtText.String(),
+					},
+				},
+			})
+		}
 		if fullText != "" {
 			outputList = append(outputList, map[string]interface{}{
 				"id":     st.outputItemID,

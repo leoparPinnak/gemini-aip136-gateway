@@ -125,7 +125,7 @@ func handleModels(w http.ResponseWriter, r *http.Request) {
 	createdTimestamp := 1789422000
 	models := []map[string]interface{}{
 		{
-			"id":               "gemini-3.8-flash-low",
+			"id":               "gemini-3.8-flash-high",
 			"object":           "model",
 			"created":          createdTimestamp,
 			"owned_by":         "google",
@@ -141,7 +141,15 @@ func handleModels(w http.ResponseWriter, r *http.Request) {
 			"modalities":       []string{"text", "image", "video", "audio"},
 		},
 		{
-			"id":               "gemini-3.8-flash-high",
+			"id":               "gemini-3.8-flash-low",
+			"object":           "model",
+			"created":          createdTimestamp,
+			"owned_by":         "google",
+			"input_modalities": []string{"text", "image", "video", "audio"},
+			"modalities":       []string{"text", "image", "video", "audio"},
+		},
+		{
+			"id":               "gemini-3.8-flash-nothinking",
 			"object":           "model",
 			"created":          createdTimestamp,
 			"owned_by":         "google",
@@ -874,6 +882,17 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		reqInfo.CacheHit = cachedTokens > 0
 		BroadcastRequestEvent(reqInfo)
 
+		outText := outputText.String()
+		if outText == "" && len(fnCalls) == 0 {
+			thought := strings.TrimSpace(thoughtText.String())
+			if thought != "" {
+				outText = "*(Bilgilendirme: Model düşünme/akıl yürütme sürecini tamamladı ancak nihai bir yanıt metni veya araç çağrısı üretmeden oturumu sonlandırdı. Lütfen işlemi sürdürmek için 'Devam et' yazın.)*"
+			} else {
+				outText = "*(Bilgilendirme: Model herhangi bir yanıt çıktısı veya araç çağrısı üretmeden oturumu tamamladı. Lütfen işlemi sürdürmek için 'Devam et' yazın.)*"
+			}
+			log.Printf("[⚠️ Gateway Fallback] Non-streaming model '%s' (PID: %d) boş yanıt döndü. Boş yanıt koruma kalkanı devreye girdi.\n", modelName, pid)
+		}
+
 		resp := map[string]interface{}{
 			"id":      reqID,
 			"object":  "chat.completion",
@@ -884,7 +903,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 					"index": 0,
 					"message": map[string]interface{}{
 						"role":    "assistant",
-						"content": outputText.String(),
+						"content": outText,
 					},
 					"finish_reason": "stop",
 				},
@@ -926,7 +945,7 @@ func main() {
 	InitSettingsManager()
 
 	// 3. İstek Yapan Program / PID İzleyicisini Başlat
-	InitProcessInspector()
+	InitProcessInspector(port)
 
 	// 4. Program Bazlı Akıllı Hesap Yönlendiricisini Başlat
 	InitProgramRouter("program_rules.json")
