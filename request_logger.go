@@ -19,9 +19,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"sync"
 	"time"
 )
+
+var reServerDur = regexp.MustCompile(`dur=(\d+)`)
 
 // RequestLogEntry bir isteğin bitiminde yazılan kalıcı satır.
 // cached==0 satırlarında LastUsage (son usageMetadata ham hali) saklanır;
@@ -40,6 +43,7 @@ type RequestLogEntry struct {
 	Status     string `json:"status"` // completed | error | truncated
 	Endpoint   string `json:"endpoint"`
 	DurationMs int64  `json:"duration_ms"`
+	ServerDurMs int64 `json:"server_dur_ms,omitempty"` // server-timing gfet4t7 dur= (upstream sure sinyali, hit/miss karsilastirmasi)
 
 	Prompt int `json:"prompt"`
 	Cached int `json:"cached"`
@@ -219,6 +223,8 @@ func (rl *RequestLogger) Log(e RequestLogEntry) {
 	}
 	// Hibrit içerik loglama: yalnız cache'lenebilir miss'lerde tam dump.
 	dumpPayloadOnMiss(&e)
+	// Kök-neden deneyi (CACHE_MISS_PROBE=1): miss anında aynı içerikle probe.
+	fireCacheProbe(&e)
 	raw, err := json.Marshal(e)
 	if err != nil {
 		return
@@ -361,6 +367,13 @@ func attachConn(e *RequestLogEntry, ci *ConnInfo, trace string) {
 	e.ConnReused = ci.Reused
 	e.ConnWaitMs = ci.WaitMs
 	e.upHeaders = ci.Headers
+	if ci.Headers != nil {
+		if st := ci.Headers["Server-Timing"]; st != "" {
+			if m := reServerDur.FindStringSubmatch(st); m != nil {
+				e.ServerDurMs, _ = strconv.ParseInt(m[1], 10, 64)
+			}
+		}
+	}
 	if trace != "" {
 		e.UpstreamTrace = trace
 	} else {
