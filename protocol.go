@@ -127,6 +127,25 @@ type GeminiGenerationConfig struct {
 	Temperature     float64               `json:"temperature"`
 	TopP            float64               `json:"topP"`
 	ThinkingConfig  *GeminiThinkingConfig `json:"thinkingConfig,omitempty"`
+	// OpenAI istek parametreleri (opt-in passthrough — YALNIZCA istemci gönderirse
+	// basılır; varsayılan zarf bayt-bayt değişmez → cache korunur).
+	StopSequences    []string               `json:"stopSequences,omitempty"`
+	Seed             *int                   `json:"seed,omitempty"`
+	FrequencyPenalty *float64               `json:"frequencyPenalty,omitempty"`
+	PresencePenalty  *float64               `json:"presencePenalty,omitempty"`
+	ResponseMimeType string                 `json:"responseMimeType,omitempty"`
+	ResponseSchema   map[string]interface{} `json:"responseSchema,omitempty"`
+}
+
+// GeminiFunctionCallingConfig, OpenAI tool_choice karşılığıdır
+// (auto→yok, none→NONE, required→ANY, {"function":{"name"}}→ANY+allowedFunctionNames).
+type GeminiFunctionCallingConfig struct {
+	Mode                 string   `json:"mode,omitempty"`
+	AllowedFunctionNames []string `json:"allowedFunctionNames,omitempty"`
+}
+
+type GeminiToolConfig struct {
+	FunctionCallingConfig *GeminiFunctionCallingConfig `json:"functionCallingConfig,omitempty"`
 }
 
 type GeminiFunctionDeclaration struct {
@@ -145,6 +164,7 @@ type GeminiInnerRequest struct {
 	GenerationConfig  GeminiGenerationConfig   `json:"generationConfig"`
 	SessionID         string                   `json:"sessionId"`
 	Tools             []GeminiTool             `json:"tools,omitempty"`
+	ToolConfig        *GeminiToolConfig        `json:"toolConfig,omitempty"`
 }
 
 type GeminiAipPayload struct {
@@ -1473,16 +1493,106 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 		topP = tp
 	}
 
+	// ── OpenAI ek parametreler (opt-in passthrough) ──────────────────────────
+	// Yalnızca istemci gönderirse basılır; varsayılan zarf bayt-bayt değişmez → cache korunur.
+
+	// stop → stopSequences
+	var stopSequences []string
+	switch stopVal := body["stop"].(type) {
+	case string:
+		if strings.TrimSpace(stopVal) != "" {
+			stopSequences = []string{stopVal}
+		}
+	case []interface{}:
+		for _, s := range stopVal {
+			if sv, ok := s.(string); ok && strings.TrimSpace(sv) != "" {
+				stopSequences = append(stopSequences, sv)
+			}
+		}
+	}
+
+	// seed → seed
+	var seedPtr *int
+	if sv, ok := body["seed"].(float64); ok {
+		si := int(sv)
+		seedPtr = &si
+	}
+
+	// frequency_penalty / presence_penalty
+	var freqPtr, presPtr *float64
+	if fv, ok := body["frequency_penalty"].(float64); ok {
+		freqPtr = &fv
+	}
+	if pv, ok := body["presence_penalty"].(float64); ok {
+		presPtr = &pv
+	}
+
+	// response_format (Chat) veya text.format (Responses) → responseMimeType + responseSchema
+	var respMime string
+	var respSchema map[string]interface{}
+	rf, _ := body["response_format"].(map[string]interface{})
+	if rf == nil {
+		if txtCfg, ok := body["text"].(map[string]interface{}); ok {
+			rf, _ = txtCfg["format"].(map[string]interface{})
+		}
+	}
+	if rf != nil {
+		rfType, _ := rf["type"].(string)
+		switch rfType {
+		case "json_object":
+			respMime = "application/json"
+		case "json_schema":
+			respMime = "application/json"
+			if js, ok := rf["json_schema"].(map[string]interface{}); ok {
+				if sc, ok := js["schema"].(map[string]interface{}); ok {
+					respSchema = ConvertSchemaTypeToGemini(sc)
+				}
+			}
+		}
+	}
+
+	// tool_choice → toolConfig.functionCallingConfig (auto → yok; eski davranış korunur)
+	var toolCfg *GeminiToolConfig
+	if len(geminiTools) > 0 {
+		switch tc := body["tool_choice"].(type) {
+		case string:
+			switch tc {
+			case "none":
+				toolCfg = &GeminiToolConfig{FunctionCallingConfig: &GeminiFunctionCallingConfig{Mode: "NONE"}}
+			case "required", "any":
+				toolCfg = &GeminiToolConfig{FunctionCallingConfig: &GeminiFunctionCallingConfig{Mode: "ANY"}}
+			}
+		case map[string]interface{}:
+			if tType, _ := tc["type"].(string); tType == "function" {
+				if fn, ok := tc["function"].(map[string]interface{}); ok {
+					if name, ok := fn["name"].(string); ok && name != "" {
+						toolCfg = &GeminiToolConfig{FunctionCallingConfig: &GeminiFunctionCallingConfig{
+							Mode:                 "ANY",
+							AllowedFunctionNames: []string{name},
+						}}
+					}
+				}
+			}
+		}
+	}
+
 	reqObj := GeminiInnerRequest{
 		Contents: mergedContents,
 		GenerationConfig: GeminiGenerationConfig{
-			MaxOutputTokens: maxTokens,
-			Temperature:     temp,
-			TopP:            topP,
-			ThinkingConfig:  thinkingConfig,
+			MaxOutputTokens:  maxTokens,
+			Temperature:      temp,
+			TopP:             topP,
+			ThinkingConfig:   thinkingConfig,
+			StopSequences:    stopSequences,
+			Seed:             seedPtr,
+			FrequencyPenalty: freqPtr,
+			PresencePenalty:  presPtr,
+			ResponseMimeType: respMime,
+			ResponseSchema:   respSchema,
 		},
-		SessionID: sessionID,
-		Tools:     geminiTools,
+		SessionID:  sessionID,
+		Tools:      geminiTools,
+		ToolConfig: toolCfg,
 	}
 
 	if strings.TrimSpace(finalSystemPrompt) != "" {

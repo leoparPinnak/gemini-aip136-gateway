@@ -905,6 +905,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		var fnCalls []GeminiFunctionCall
 		var usage *GeminiUsageMetadata
 		var lastTrace string
+		var blockReason, blockReasonMsg string
 		lastFinish := ""
 		fnCallSeq := 0
 
@@ -914,6 +915,17 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				lastTrace = chunk.Response.TraceID
 			} else if chunk.TraceID != "" {
 				lastTrace = chunk.TraceID
+			}
+			// İçerik filtresi bayrağı (promptFeedback.blockReason → refusal haritası)
+			fb := chunk.Response.PromptFeedback
+			if fb == nil {
+				fb = chunk.PromptFeedback
+			}
+			if fb != nil && fb.BlockReason != "" {
+				blockReason = fb.BlockReason
+				if fb.BlockReasonMessage != "" {
+					blockReasonMsg = fb.BlockReasonMessage
+				}
 			}
 			if chunk.Response.UsageMetadata != nil {
 				usage = chunk.Response.UsageMetadata
@@ -1045,7 +1057,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		GlobalReqLog.Log(le)
 
 		outText := outputText.String()
-		if outText == "" && len(fnCalls) == 0 {
+		if outText == "" && len(fnCalls) == 0 && blockReason == "" {
 			thought := strings.TrimSpace(thoughtText.String())
 			if thought != "" {
 				outText = "*(Bilgilendirme: Model düşünme/akıl yürütme sürecini tamamladı ancak nihai bir yanıt metni veya araç çağrısı üretmeden oturumu sonlandırdı. Lütfen işlemi sürdürmek için 'Devam et' yazın.)*"
@@ -1063,6 +1075,14 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 		if thoughtText.Len() > 0 {
 			msg["reasoning_content"] = thoughtText.String()
+		}
+		// İçerik filtresi → resmi message.refusal alanı (fallback metni enjekte edilmez)
+		if blockReason != "" {
+			refusalMsg := blockReasonMsg
+			if strings.TrimSpace(refusalMsg) == "" {
+				refusalMsg = fmt.Sprintf("İçerik filtresi tarafından engellendi (Google: %s)", blockReason)
+			}
+			msg["refusal"] = refusalMsg
 		}
 		if len(fnCalls) > 0 {
 			tcs := make([]map[string]interface{}, 0, len(fnCalls))
@@ -1093,6 +1113,11 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		finishReason := mapChatFinishReason(lastFinish, len(fnCalls) > 0)
+		if blockReason != "" {
+			finishReason = "content_filter"
+		}
+
 		resp := map[string]interface{}{
 			"id":      reqID,
 			"object":  "chat.completion",
@@ -1102,7 +1127,7 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				{
 					"index":         0,
 					"message":       msg,
-					"finish_reason": mapChatFinishReason(lastFinish, len(fnCalls) > 0),
+					"finish_reason": finishReason,
 				},
 			},
 			"usage": usageObj,

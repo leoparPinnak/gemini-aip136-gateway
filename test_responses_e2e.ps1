@@ -31,6 +31,12 @@ try {
 
     $d1 = (curl.exe -s -X DELETE "http://127.0.0.1:8099/v1/responses/$($j1.id)") | ConvertFrom-Json
     Write-Output ("DELETE {{id}}: deleted={0}" -f $d1.deleted)
+
+    # TUR-3: response_format + tool_choice + stop + seed — kapalı uç bunları kabul ediyor mu?
+    $body3 = '{"model":"gemini-3.8-flash-medium","input":"Say hi in one word.","stream":false,"text":{"format":{"type":"json_object"}},"tools":[{"type":"function","function":{"name":"noop","parameters":{"type":"object"}}}],"tool_choice":"none","stop":["XYZ"],"seed":7}'
+    [System.IO.File]::WriteAllText("$env:TEMP\gw_body3.json", $body3, $enc)
+    $raw3 = curl.exe -s -X POST http://127.0.0.1:8099/v1/responses -H 'Content-Type: application/json' -d "@$env:TEMP\gw_body3.json" --max-time 60
+    Write-Output ("TUR-3 (response_format+tool_choice+stop+seed): {0}" -f $raw3.Substring(0, [Math]::Min(260, $raw3.Length)))
 } finally {
     Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
     Remove-Item .\smoke_test_gateway.exe -ErrorAction SilentlyContinue

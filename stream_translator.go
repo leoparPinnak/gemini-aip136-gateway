@@ -42,6 +42,12 @@ type StreamTranslator struct {
 	thoughtSig  string // thought part'ındaki son geçerli thoughtSignature (encrypted_content olarak taşınır)
 	textSig     string // nihai metin part'ındaki thoughtSignature ("txt:<item-id>" olarak saklanır)
 
+	// İçerik filtresi / refusal (promptFeedback.blockReason)
+	blockReason    string
+	blockReasonMsg string
+	isRefusal      bool
+	refusalMsg     string
+
 	promptTokens     int
 	outputTokens     int
 	cachedTokens     int
@@ -188,6 +194,18 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 		st.lastTraceID = chunk.Response.TraceID
 	} else if chunk.TraceID != "" {
 		st.lastTraceID = chunk.TraceID
+	}
+
+	// İçerik filtresi bayrağı (promptFeedback.blockReason) — refusal haritası için
+	fb := chunk.Response.PromptFeedback
+	if fb == nil {
+		fb = chunk.PromptFeedback
+	}
+	if fb != nil && fb.BlockReason != "" {
+		st.blockReason = fb.BlockReason
+		if fb.BlockReasonMessage != "" {
+			st.blockReasonMsg = fb.BlockReasonMessage
+		}
 	}
 
 	// Extract usage
@@ -528,7 +546,78 @@ func (st *StreamTranslator) FinishStream() bool {
 	// Boş Yanıt Koruma Kalkanı (Empty Content Fallback Shield)
 	// Eğer model ne nihai metin ne de araç/fonksiyon çağrısı ürettiyse (örneğin düşünme bütçesini tüketip durduysa),
 	// istemcinin "completed response with no content" hatasıyla çökmesini engellemek için fallback içeriği enjekte et.
-	if fullText == "" && len(st.activeFnCalls) == 0 {
+	if fullText == "" && len(st.activeFnCalls) == 0 && st.blockReason != "" {
+		// İçerik filtresi → REdusal (fallback metni ENJEKTE EDİLMEZ — sıfır enjeksiyon).
+		// Resmi protokol: mesaj item'ı refusal parçası taşır, terminal olay
+		// response.incomplete + incomplete_details: content_filter olur.
+		st.isRefusal = true
+		st.refusalMsg = st.blockReasonMsg
+		if strings.TrimSpace(st.refusalMsg) == "" {
+			st.refusalMsg = fmt.Sprintf("İçerik filtresi tarafından engellendi (Google: %s)", st.blockReason)
+		}
+		log.Printf("[🚫 İçerik Filtresi] Model '%s' (PID: %d, %s) bloklandı: %s\n",
+			st.modelName, st.pid, st.processName, st.blockReason)
+
+		if st.isResponsesAPI {
+			if !st.hasEmittedHeader {
+				st.hasEmittedHeader = true
+				st.sendSSE("response.created", map[string]interface{}{
+					"type":        "response.created",
+					"response_id": st.responseID,
+					"response": map[string]interface{}{
+						"id":         st.responseID,
+						"object":     "response",
+						"created_at": time.Now().Unix(),
+						"status":     "in_progress",
+						"model":      st.modelName,
+						"output":     []interface{}{},
+						"usage":      nil,
+					},
+				})
+			}
+			if !st.hasStartedItem {
+				st.hasStartedItem = true
+				st.textOutputIndex = st.nextOutputIndex
+				st.nextOutputIndex++
+				st.sendSSE("response.output_item.added", map[string]interface{}{
+					"type":         "response.output_item.added",
+					"response_id":  st.responseID,
+					"output_index": st.textOutputIndex,
+					"item": map[string]interface{}{
+						"id":      st.outputItemID,
+						"type":    "message",
+						"status":  "in_progress",
+						"role":    "assistant",
+						"content": []interface{}{},
+					},
+				})
+			}
+			st.sendSSE("response.refusal.delta", map[string]interface{}{
+				"type":         "response.refusal.delta",
+				"response_id":  st.responseID,
+				"item_id":      st.outputItemID,
+				"output_index": st.textOutputIndex,
+				"delta":        st.refusalMsg,
+			})
+		} else {
+			st.sendSSE("", map[string]interface{}{
+				"id":      st.responseID,
+				"object":  "chat.completion.chunk",
+				"created": time.Now().Unix(),
+				"model":   st.modelName,
+				"choices": []map[string]interface{}{
+					{
+						"index": 0,
+						"delta": map[string]interface{}{
+							"refusal": st.refusalMsg,
+						},
+					},
+				},
+			})
+		}
+	}
+
+	if fullText == "" && len(st.activeFnCalls) == 0 && !st.isRefusal {
 		thought := strings.TrimSpace(st.fullThoughtText.String())
 		var fallbackText string
 		if thought != "" {
@@ -632,60 +721,59 @@ func (st *StreamTranslator) FinishStream() bool {
 
 		// Crucial fix for DSH: output_item.done MUST contain the accumulated output_text!
 		if fullText != "" || st.hasStartedItem {
-			// Resmi şema + plans/01 §3.7: içerik parçası ve metin tamamlanma olayları
-			st.sendSSE("response.output_text.done", map[string]interface{}{
-				"type":          "response.output_text.done",
-				"response_id":   st.responseID,
-				"item_id":       st.outputItemID,
-				"output_index":  st.textOutputIndex,
-				"content_index": 0,
-				"text":          fullText,
-				"logprobs":      []interface{}{},
-			})
-			st.sendSSE("response.content_part.done", map[string]interface{}{
-				"type":          "response.content_part.done",
-				"response_id":   st.responseID,
-				"item_id":       st.outputItemID,
-				"output_index":  st.textOutputIndex,
-				"content_index": 0,
-				"part": map[string]interface{}{
-					"type":        "output_text",
-					"text":        fullText,
-					"annotations": []interface{}{},
-				},
-			})
+			if !st.isRefusal {
+				// Resmi şema + plans/01 §3.7: içerik parçası ve metin tamamlanma olayları
+				st.sendSSE("response.output_text.done", map[string]interface{}{
+					"type":          "response.output_text.done",
+					"response_id":   st.responseID,
+					"item_id":       st.outputItemID,
+					"output_index":  st.textOutputIndex,
+					"content_index": 0,
+					"text":          fullText,
+					"logprobs":      []interface{}{},
+				})
+				st.sendSSE("response.content_part.done", map[string]interface{}{
+					"type":          "response.content_part.done",
+					"response_id":   st.responseID,
+					"item_id":       st.outputItemID,
+					"output_index":  st.textOutputIndex,
+					"content_index": 0,
+					"part": map[string]interface{}{
+						"type":        "output_text",
+						"text":        fullText,
+						"annotations": []interface{}{},
+					},
+				})
+			}
 			st.sendSSE("response.output_item.done", map[string]interface{}{
 				"type":         "response.output_item.done",
 				"response_id":  st.responseID,
 				"output_index": st.textOutputIndex,
 				"item": map[string]interface{}{
-					"id":     st.outputItemID,
-					"type":   "message",
-					"status": "completed",
-					"role":   "assistant",
-					"content": []map[string]interface{}{
-						{
-							"type": "output_text",
-							"text": fullText,
-						},
-					},
+					"id":      st.outputItemID,
+					"type":    "message",
+					"status":  "completed",
+					"role":    "assistant",
+					"content": st.messageItemContent(fullText),
 				},
 			})
 		}
 
-		// Terminal olay: MAX_TOKENS → resmi 'response.incomplete' (status: incomplete,
-		// incomplete_details: max_output_tokens). DSH/pi-ai her ikisini de terminal
-		// olarak işler (openai-responses-shared.js → finalizeResponse).
+		// Terminal olay: MAX_TOKENS → resmi 'response.incomplete' (max_output_tokens);
+		// içerik filtresi → 'response.incomplete' (content_filter). DSH/pi-ai her ikisini
+		// de terminal olarak işler (openai-responses-shared.js → finalizeResponse).
 		termEvent := "response.completed"
 		termStatus := "completed"
+		termReason := ""
 		if st.lastFinishReason == "MAX_TOKENS" {
-			termEvent = "response.incomplete"
-			termStatus = "incomplete"
+			termEvent, termStatus, termReason = "response.incomplete", "incomplete", "max_output_tokens"
+		} else if st.blockReason != "" {
+			termEvent, termStatus, termReason = "response.incomplete", "incomplete", "content_filter"
 		}
 
 		respObj := st.buildResponseObject(termStatus)
-		if termStatus == "incomplete" {
-			respObj["incomplete_details"] = map[string]interface{}{"reason": "max_output_tokens"}
+		if termReason != "" {
+			respObj["incomplete_details"] = map[string]interface{}{"reason": termReason}
 		}
 		st.sendSSE(termEvent, map[string]interface{}{
 			"type":     termEvent,
@@ -693,6 +781,9 @@ func (st *StreamTranslator) FinishStream() bool {
 		})
 	} else {
 		finishReason := mapChatFinishReason(st.lastFinishReason, len(st.activeFnCalls) > 0)
+		if st.blockReason != "" {
+			finishReason = "content_filter"
+		}
 
 		outTok := st.outputTokens
 		if outTok == 0 && (st.fullOutputText.Len() > 0 || st.fullThoughtText.Len() > 0) {
@@ -785,19 +876,13 @@ func (st *StreamTranslator) buildResponseObject(status string) map[string]interf
 		}
 		outputList = append(outputList, reasoningItem)
 	}
-	if fullText != "" {
+	if fullText != "" || st.isRefusal {
 		outputList = append(outputList, map[string]interface{}{
-			"id":     st.outputItemID,
-			"type":   "message",
-			"status": "completed",
-			"role":   "assistant",
-			"content": []map[string]interface{}{
-				{
-					"type":        "output_text",
-					"text":        fullText,
-					"annotations": []interface{}{},
-				},
-			},
+			"id":      st.outputItemID,
+			"type":    "message",
+			"status":  "completed",
+			"role":    "assistant",
+			"content": st.messageItemContent(fullText),
 		})
 	}
 	for _, fn := range st.activeFnCalls {
@@ -842,16 +927,33 @@ func (st *StreamTranslator) buildResponseObject(status string) map[string]interf
 	}
 }
 
+// messageItemContent, mesaj item'ının içerik parçalarını üretir (refusal aware):
+// içerik filtresinde resmi 'refusal' parçası, normalde 'output_text' parçası.
+func (st *StreamTranslator) messageItemContent(fullText string) []map[string]interface{} {
+	if st.isRefusal {
+		return []map[string]interface{}{
+			{"type": "refusal", "refusal": st.refusalMsg},
+		}
+	}
+	return []map[string]interface{}{
+		{"type": "output_text", "text": fullText, "annotations": []interface{}{}},
+	}
+}
+
 // BuildResponseObject, akış durumundan resmi yanıt nesnesini üretir (non-stream yol).
-// MAX_TOKENS'ta status: "incomplete" + incomplete_details döner.
+// MAX_TOKENS'ta status: "incomplete" + incomplete_details: max_output_tokens;
+// içerik filtresinde incomplete + content_filter döner.
 func (st *StreamTranslator) BuildResponseObject() map[string]interface{} {
 	status := "completed"
+	reason := ""
 	if st.lastFinishReason == "MAX_TOKENS" {
-		status = "incomplete"
+		status, reason = "incomplete", "max_output_tokens"
+	} else if st.blockReason != "" {
+		status, reason = "incomplete", "content_filter"
 	}
 	obj := st.buildResponseObject(status)
-	if status == "incomplete" {
-		obj["incomplete_details"] = map[string]interface{}{"reason": "max_output_tokens"}
+	if reason != "" {
+		obj["incomplete_details"] = map[string]interface{}{"reason": reason}
 	}
 	return obj
 }
