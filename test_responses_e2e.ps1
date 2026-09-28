@@ -37,6 +37,20 @@ try {
     [System.IO.File]::WriteAllText("$env:TEMP\gw_body3.json", $body3, $enc)
     $raw3 = curl.exe -s -X POST http://127.0.0.1:8099/v1/responses -H 'Content-Type: application/json' -d "@$env:TEMP\gw_body3.json" --max-time 60
     Write-Output ("TUR-3 (response_format+tool_choice+stop+seed): {0}" -f $raw3.Substring(0, [Math]::Min(260, $raw3.Length)))
+
+    # TUR-4: stream — reasoning gercekten anlik (delta delta) akiyor mu?
+    $body4 = '{"model":"gemini-3.8-flash-high","input":"Why is the sky blue? Think first.","stream":true}'
+    [System.IO.File]::WriteAllText("$env:TEMP\gw_body4.json", $body4, $enc)
+    $raw4 = curl.exe -s -N -X POST http://127.0.0.1:8099/v1/responses -H 'Content-Type: application/json' -d "@$env:TEMP\gw_body4.json" --max-time 90
+    $events = @{}
+    foreach ($line in $raw4) {
+        if ($line.StartsWith('event: ')) {
+            $e = $line.Substring(7).Trim()
+            if ($events.ContainsKey($e)) { $events[$e]++ } else { $events[$e] = 1 }
+        }
+    }
+    $summary = ($events.GetEnumerator() | Sort-Object Name | ForEach-Object { "{0}x{1}" -f $_.Name, $_.Value }) -join " | "
+    Write-Output ("TUR-4 (stream) olay dagilimi: {0}" -f $summary)
 } finally {
     Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
     Remove-Item .\smoke_test_gateway.exe -ErrorAction SilentlyContinue
