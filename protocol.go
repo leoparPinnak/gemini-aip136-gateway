@@ -739,6 +739,16 @@ type ProtocolContext struct {
 
 const OfficialAntigravityUserAgent = "antigravity/cli/1.2.7 (aidev_client; os_type=windows; arch=amd64; cl=980147163; auth_method=consumer)"
 
+// NarrationRuleText, araç duyurusu (narration) kuralıdır — istek anında
+// systemInstruction'a eklenir. Metin SABİTTİR (cache-sadakat: her istekte
+// bayt-bayt aynı) ve DSH tarafındaki 'model:narration-guidance' bölümüyle
+// BİREBİR AYNIdır; böylece istemci kuralı zaten taşıyorsa ikinci basım
+// NarrationRuleMarker ile engellenir (idempotent, çift enjeksiyon yok).
+const NarrationRuleText = "Tool-call status updates: before each tool call, write ONE short visible sentence to the user (in the user language) announcing the step you are about to take (example: \"Reading the config file now.\"). This update MUST be regular visible output text, never inside your thinking or reasoning block. One sentence only; never skip it, even when the step is obvious."
+
+// NarrationRuleMarker, kuralın varlığını saptayan benzersiz öbeğidir.
+const NarrationRuleMarker = "Tool-call status updates"
+
 var (
 	stealthSessionMutex sync.Mutex
 	stealthSessionMap   = make(map[int]string)
@@ -1245,8 +1255,23 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 		}
 	}
 
-	// Final System Prompt: Sadece istekte sistem istemi varsa iletilir (Harici hiçbir enjeksiyon yapılmaz)
+	// Final System Prompt: İstekten gelen sistem istemi (kalıcı enjeksiyon yok;
+	// tek istisna isteğe bağlı narration kuralıdır — aşağıda, idempotent).
 	finalSystemPrompt := extractedSystemPrompt
+
+	// ── Araç Duyurusu (Narration) Kuralı — istek anında gateway enjeksiyonu ──
+	// Gemini modelleri anlatıyı düşünce kanalına yazma eğilimindedir; bu kural
+	// görünür ara yanıtı zorunlu kılar (tek cümle, her araç çağrısı öncesi).
+	// İSTEMCİ kuralı zaten taşıyorsa (örn. DSH 'model:narration-guidance'
+	// bölümü) ikinci basım YOK — marker ile idempotent. Varsayılan AÇIK;
+	// override_settings.json → "narration_hint": false ile kapatılır.
+	if GlobalSettingsManager.NarrationHintEnabled() && !strings.Contains(finalSystemPrompt, NarrationRuleMarker) {
+		if strings.TrimSpace(finalSystemPrompt) == "" {
+			finalSystemPrompt = NarrationRuleText
+		} else {
+			finalSystemPrompt = finalSystemPrompt + "\n\n" + NarrationRuleText
+		}
+	}
 
 	// Target Model: İstekten gelen modele sadık kal, belirtilmemişse varsayılan gemini-3.8-flash-medium
 	reqModel, _ := body["model"].(string)

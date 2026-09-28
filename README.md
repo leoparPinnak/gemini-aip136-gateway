@@ -16,7 +16,8 @@ Standart **OpenAI Chat Completions (`/v1/chat/completions`)** ve yeni nesil **Op
 
 ### 1. Sıfır Prompt Enjeksiyonu (Zero Prompt Injection)
 * **Saf Bağlam Garantisi:** Gateway, modelin mantığını bulandıracak veya bağlamını bozacak hiçbir harici yapay prompt, sistem rolü veya direktif enjekte etmez.
-* İstemcinin (DSH, agent veya kullanıcının) gönderdiği tüm sistem mesajları (`system` / `instructions`), kullanıcı mesajları ve araç tanımları **olduğu gibi, şeffaf bir şekilde** Google AIP-136 motoruna aktarılır.
+* **Tek istisna — Araç Duyurusu (Narration) Kuralı:** Gemini modelleri adım anlatısını düşünce kanalına yazma eğiliminde olduğundan, isteğe bağlı **tek bir davranış kuralı** (her araç çağrısı öncesi görünür, tek cümlelik duyuru) istek anında `systemInstruction`'ın sonuna eklenir. **Varsayılan AÇIK** — `override_settings.json` içine `"narration_hint": false` yazılarak kapatılır. Enjeksiyon **idempotenttir** (istemci kuralı zaten taşıyorsa ikinci basım yapılmaz; DSH'taki `model:narration-guidance` bölümüyle birebir aynı metindir) ve metin **bayt-bayt sabittir** (KV-cache dostudur).
+* İstemcinin (DSH, agent veya kullanıcının) gönderdiği diğer tüm sistem mesajları (`system` / `instructions`), kullanıcı mesajları ve araç tanımları **olduğu gibi, şeffaf bir şekilde** Google AIP-136 motoruna aktarılır.
 
 ### 2. Go Native TLS Parmak İzi (1:1 Antigravity CLI Eşleşmesi)
 * Node.js (`undici`, `https.Agent`) veya Python kütüphaneleri Google CloudCode uç noktalarında (`daily-cloudcode-pa.googleapis.com`) JA3/JA4 TLS parmak izi analiziyle engellenir.

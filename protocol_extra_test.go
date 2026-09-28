@@ -157,3 +157,73 @@ func TestReasoningRoundTrip(t *testing.T) {
 		t.Errorf("reasoning item thought part + imza geri konamadı; contents=%+v", payload.Request.Contents)
 	}
 }
+
+// Narration kuralı: istek anında enjeksiyon + idempotentlik + kapatma anahtarı
+func TestNarrationHint(t *testing.T) {
+	saved := GlobalSettingsManager
+	defer func() { GlobalSettingsManager = saved }()
+
+	// 1) Varsayılan (ayar yöneticisi yokken bile AÇIK): kural sistem isteminin
+	//    SONUNDA ve TEK KEZ basılır; istemcinin kendi metni önde kalır.
+	GlobalSettingsManager = nil
+	p1, _, _, _, err := ConvertOpenAiRequestToGemini([]byte(`{"model":"m","input":"hi","instructions":"You are helpful."}`), "sess-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p1.Request.SystemInstruction == nil {
+		t.Fatal("systemInstruction eksik")
+	}
+	text1 := p1.Request.SystemInstruction.Parts[0].Text
+	if strings.Count(text1, NarrationRuleMarker) != 1 {
+		t.Errorf("kural tam 1 kez basılmalı, %d kez: %s", strings.Count(text1, NarrationRuleMarker), text1)
+	}
+	if !strings.HasSuffix(text1, NarrationRuleText) {
+		t.Errorf("kural sonda olmalı: %s", text1)
+	}
+	if !strings.HasPrefix(text1, "You are helpful.") {
+		t.Errorf("istemci metni önde kalmalı: %s", text1)
+	}
+
+	// 2) İstemci kuralı zaten taşıyorsa (örn. DSH eklentisi): ikinci basım YOK
+	req2, _ := json.Marshal(map[string]interface{}{
+		"model":        "m",
+		"input":        "hi",
+		"instructions": "Base prompt.\n\n" + NarrationRuleText,
+	})
+	p2, _, _, _, err := ConvertOpenAiRequestToGemini(req2, "sess-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text2 := p2.Request.SystemInstruction.Parts[0].Text
+	if strings.Count(text2, NarrationRuleMarker) != 1 {
+		t.Errorf("idempotentlik bozuldu (%d basım): %s", strings.Count(text2, NarrationRuleMarker), text2)
+	}
+	if text2 != "Base prompt.\n\n"+NarrationRuleText {
+		t.Errorf("istemci metni değişmemeli: %s", text2)
+	}
+
+	// 3) Kapatma anahtarı: narration_hint=false → kural HİÇ basılmaz
+	f := false
+	GlobalSettingsManager = &SettingsManager{settings: OverrideSettings{NarrationHint: &f}}
+	p3, _, _, _, err := ConvertOpenAiRequestToGemini([]byte(`{"model":"m","input":"hi","instructions":"You are helpful."}`), "sess-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text3 := p3.Request.SystemInstruction.Parts[0].Text; text3 != "You are helpful." {
+		t.Errorf("kapalıyken metin değişmemeli: %s", text3)
+	}
+	p4, _, _, _, err := ConvertOpenAiRequestToGemini([]byte(`{"model":"m","input":"hi"}`), "sess-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p4.Request.SystemInstruction != nil {
+		t.Errorf("kapalıyken systemInstruction üretilmemeli: %+v", p4.Request.SystemInstruction)
+	}
+
+	// 4) Eski ayar dosyası (alan yok → normalize → AÇIK)
+	GlobalSettingsManager = &SettingsManager{settings: OverrideSettings{}}
+	GlobalSettingsManager.normalize()
+	if !GlobalSettingsManager.NarrationHintEnabled() {
+		t.Errorf("alan yokken varsayılan AÇIK olmalı")
+	}
+}
