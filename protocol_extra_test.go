@@ -202,6 +202,22 @@ func TestNarrationHint(t *testing.T) {
 		t.Errorf("istemci metni değişmemeli: %s", text2)
 	}
 
+	// 2b) Eski (araç-başına) kural izi taşıyan istemci: yeni kural ÜSTÜNE
+	//     EKLENMEZ — iki zıt kural aynı promptta çelişirdi.
+	reqLegacy, _ := json.Marshal(map[string]interface{}{
+		"model":        "m",
+		"input":        "hi",
+		"instructions": "Base prompt.\n\nTool-call status updates: before each tool call, write one sentence.",
+	})
+	pLegacy, _, _, _, err := ConvertOpenAiRequestToGemini(reqLegacy, "sess-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	textLegacy := pLegacy.Request.SystemInstruction.Parts[0].Text
+	if strings.Contains(textLegacy, NarrationRuleMarker) {
+		t.Errorf("eski kural izi varken yeni kural eklenmemeli: %s", textLegacy)
+	}
+
 	// 3) Kapatma anahtarı: narration_hint=false → kural HİÇ basılmaz
 	f := false
 	GlobalSettingsManager = &SettingsManager{settings: OverrideSettings{NarrationHint: &f}}

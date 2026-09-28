@@ -739,15 +739,20 @@ type ProtocolContext struct {
 
 const OfficialAntigravityUserAgent = "antigravity/cli/1.2.7 (aidev_client; os_type=windows; arch=amd64; cl=980147163; auth_method=consumer)"
 
-// NarrationRuleText, araç duyurusu (narration) kuralıdır — istek anında
+// NarrationRuleText, plan duyurusu (narration) kuralıdır — istek anında
 // systemInstruction'a eklenir. Metin SABİTTİR (cache-sadakat: her istekte
-// bayt-bayt aynı) ve DSH tarafındaki 'model:narration-guidance' bölümüyle
-// BİREBİR AYNIdır; böylece istemci kuralı zaten taşıyorsa ikinci basım
-// NarrationRuleMarker ile engellenir (idempotent, çift enjeksiyon yok).
-const NarrationRuleText = "Tool-call status updates: before each tool call, write ONE short visible sentence to the user (in the user language) announcing the step you are about to take (example: \"Reading the config file now.\"). This update MUST be regular visible output text, never inside your thinking or reasoning block. One sentence only; never skip it, even when the step is obvious."
+// bayt-bayt aynı). Davranış: reasoning BİTER BİTEZ tek seferlik plan duyurusu,
+// sonra araçlar SESSİZ; araç başına tekrar yok. Yeni reasoning döngüsü planı
+// değiştirirse bir sonraki duyuru oradan gelir. İSTEMCİ kuralı zaten
+// taşıyorsa ikinci basım marker ile engellenir (idempotent).
+const NarrationRuleText = "Plan announcement (one per reasoning cycle): after your reasoning/thinking phase ends and you have decided your next steps, write ONE short visible message in the user's language listing the steps you are about to execute (example: \"Next I will: (1) read the config, (2) patch the gateway, (3) run the tests\"). This must be regular visible output text, never inside your thinking block. Then execute the tool calls SILENTLY without narrating each one individually; only when a NEW reasoning cycle changes the plan may you post another brief plan message."
 
 // NarrationRuleMarker, kuralın varlığını saptayan benzersiz öbeğidir.
-const NarrationRuleMarker = "Tool-call status updates"
+const NarrationRuleMarker = "Plan announcement (one per reasoning cycle)"
+
+// NarrationRuleMarkerLegacy, eski (araç-başına anlatım) kuralın izidir —
+// istemci hâlâ onu taşıyorsa yeni kural üstüne eklenmez (çelişki önlenir).
+const NarrationRuleMarkerLegacy = "Tool-call status updates"
 
 var (
 	stealthSessionMutex sync.Mutex
@@ -1261,11 +1266,13 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 
 	// ── Araç Duyurusu (Narration) Kuralı — istek anında gateway enjeksiyonu ──
 	// Gemini modelleri anlatıyı düşünce kanalına yazma eğilimindedir; bu kural
-	// görünür ara yanıtı zorunlu kılar (tek cümle, her araç çağrısı öncesi).
-	// İSTEMCİ kuralı zaten taşıyorsa (örn. DSH 'model:narration-guidance'
-	// bölümü) ikinci basım YOK — marker ile idempotent. Varsayılan AÇIK;
+	// reasoning sonrası TEK plan duyurusunu zorunlu kılar (araç başına değil).
+	// İSTEMCİ kuralı zaten taşıyorsa (yeni marker veya eski "Tool-call status
+	// updates" izi) ikinci basım YOK — çelişki de önlenir. Varsayılan AÇIK;
 	// override_settings.json → "narration_hint": false ile kapatılır.
-	if GlobalSettingsManager.NarrationHintEnabled() && !strings.Contains(finalSystemPrompt, NarrationRuleMarker) {
+	if GlobalSettingsManager.NarrationHintEnabled() &&
+		!strings.Contains(finalSystemPrompt, NarrationRuleMarker) &&
+		!strings.Contains(finalSystemPrompt, NarrationRuleMarkerLegacy) {
 		if strings.TrimSpace(finalSystemPrompt) == "" {
 			finalSystemPrompt = NarrationRuleText
 		} else {
