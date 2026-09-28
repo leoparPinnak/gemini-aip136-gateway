@@ -36,10 +36,11 @@ type StreamTranslator struct {
 	// Model turu sadakati (cache-sadakat): modelin ürettiği part'lar Google'ın
 	// gönderdiği bayt sırasıyla (ham args + thoughtSignature'lar) biriktirilir;
 	// GET/previous_response_id durum deposuna bu haliyle yazılır.
-	modelParts []GeminiPart
-	fnCallSeq  int    // akış içi benzersiz çağrı sayacı (paralel çağrı id çakışması önlenir)
-	thoughtSig string // thought part'ındaki son geçerli thoughtSignature (encrypted_content olarak taşınır)
-	textSig    string // nihai metin part'ındaki thoughtSignature ("txt:<item-id>" olarak saklanır)
+	modelParts  []GeminiPart
+	fnCallSeq   int    // akış içi benzersiz çağrı sayacı (paralel çağrı id çakışması önlenir)
+	chatToolIdx int    // chat akışı tool_calls[].index sayacı (OpenAI: akış içi artan)
+	thoughtSig  string // thought part'ındaki son geçerli thoughtSignature (encrypted_content olarak taşınır)
+	textSig     string // nihai metin part'ındaki thoughtSignature ("txt:<item-id>" olarak saklanır)
 
 	promptTokens     int
 	outputTokens     int
@@ -483,6 +484,8 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 					},
 				})
 			} else {
+				chatIdx := st.chatToolIdx
+				st.chatToolIdx++
 				st.sendSSE("", map[string]interface{}{
 					"id":      st.responseID,
 					"object":  "chat.completion.chunk",
@@ -494,7 +497,9 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 							"delta": map[string]interface{}{
 								"tool_calls": []map[string]interface{}{
 									{
-										"index": 0,
+										// OpenAI akış kuralı: her çağrı akış içi ARTAN index alır;
+										// sabit 0 paralel çağrıları tek slotta birleştiriyordu.
+										"index": chatIdx,
 										"id":    callID,
 										"type":  "function",
 										"function": map[string]interface{}{
