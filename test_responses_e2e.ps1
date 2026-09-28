@@ -51,6 +51,24 @@ try {
     }
     $summary = ($events.GetEnumerator() | Sort-Object Name | ForEach-Object { "{0}x{1}" -f $_.Name, $_.Value }) -join " | "
     Write-Output ("TUR-4 (stream) olay dagilimi: {0}" -f $summary)
+
+    # TUR-5: zamanlama — delta'lar ayni hizda geciyor mu? (sonda birikme yok mu?)
+    $body5 = '{"model":"gemini-3.8-flash-high","input":"Count from 1 to 25 slowly. Think briefly about each number first.","stream":true}'
+    [System.IO.File]::WriteAllText("$env:TEMP\gw_body5.json", $body5, $enc)
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $ts = New-Object System.Collections.Generic.List[double]
+    curl.exe -s -N -X POST http://127.0.0.1:8099/v1/responses -H 'Content-Type: application/json' -d "@$env:TEMP\gw_body5.json" --max-time 120 | ForEach-Object {
+        if ($_ -like 'event: response.*delta') { $ts.Add($sw.Elapsed.TotalMilliseconds) }
+    }
+    if ($ts.Count -ge 3) {
+        $gaps = @()
+        for ($i = 1; $i -lt $ts.Count; $i++) { $gaps += ($ts[$i] - $ts[$i-1]) }
+        $avg = ($gaps | Measure-Object -Average).Average
+        $maxGap = ($gaps | Measure-Object -Maximum).Maximum
+        Write-Output ("TUR-5 (timing): {0} delta | ilk->son {1:N0} ms | ort. bosluk {2:N0} ms | max bosluk {3:N0} ms" -f $ts.Count, ($ts[$ts.Count-1] - $ts[0]), $avg, $maxGap)
+    } else {
+        Write-Output ("TUR-5 (timing): yetersiz delta ({0})" -f $ts.Count)
+    }
 } finally {
     Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
     Remove-Item .\smoke_test_gateway.exe -ErrorAction SilentlyContinue
