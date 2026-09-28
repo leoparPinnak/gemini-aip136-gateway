@@ -42,7 +42,63 @@ type GeminiPart struct {
 type GeminiFunctionCall struct {
 	ID   string                 `json:"id,omitempty"`
 	Name string                 `json:"name"`
-	Args map[string]interface{} `json:"args"`
+	Args map[string]interface{} `json:"-"`
+	// ArgsRaw, Google'ın ürettiği args JSON'unun BAYT-HALİDİR (cache-sadakat).
+	// Geçmişe (history) geri yazılırken anahtar sırası bozulmadan aynen basılır;
+	// böylece sonraki turun prefix'i Google'ın önbellekteki token dizisiyle birebir örtüşür.
+	ArgsRaw json.RawMessage `json:"-"`
+}
+
+// MarshalJSON, args alanını modelin ürettiği ham JSON ile bayt-bayt aynı basar.
+// ArgsRaw yoksa Args haritası (alfabetik sıralı) basılır — önceki davranışla birebir.
+func (fc GeminiFunctionCall) MarshalJSON() ([]byte, error) {
+	type callAlias struct {
+		ID   string          `json:"id,omitempty"`
+		Name string          `json:"name"`
+		Args json.RawMessage `json:"args"`
+	}
+	raw := fc.ArgsRaw
+	if len(raw) == 0 {
+		b, err := json.Marshal(fc.Args)
+		if err != nil {
+			return nil, err
+		}
+		raw = b
+	}
+	return json.Marshal(callAlias{ID: fc.ID, Name: fc.Name, Args: raw})
+}
+
+// UnmarshalJSON, gelen functionCall part'ında args'un ham baytlarını da yakalar.
+func (fc *GeminiFunctionCall) UnmarshalJSON(data []byte) error {
+	type callAlias struct {
+		ID   string          `json:"id"`
+		Name string          `json:"name"`
+		Args json.RawMessage `json:"args"`
+	}
+	var a callAlias
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	fc.ID = a.ID
+	fc.Name = a.Name
+	fc.ArgsRaw = a.Args
+	fc.Args = nil
+	if len(a.Args) > 0 {
+		_ = json.Unmarshal(a.Args, &fc.Args)
+	}
+	return nil
+}
+
+// ArgsJSON, args'un her koşulda JSON metni halini döndürür (ham varsa ham, yoksa sıralı).
+func (fc *GeminiFunctionCall) ArgsJSON() string {
+	if len(fc.ArgsRaw) > 0 {
+		return string(fc.ArgsRaw)
+	}
+	b, err := json.Marshal(fc.Args)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
 }
 
 type GeminiFunctionResponse struct {
@@ -797,13 +853,97 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 			}
 		}
 
+		// 2b. OpenAI Responses API reasoning item — düşünce geri beslemesi (round-trip).
+		// DSH/pi-ai reasoning item'ını output_item.done'daki haliyle VERBATIM geri gönderir;
+		// thoughtSignature burada 'encrypted_content' alanında taşınır (bkz. stream_translator).
+		if itemType == "reasoning" {
+			sig, _ := item["encrypted_content"].(string)
+			if sig == "" {
+				sig, _ = item["thought_signature"].(string)
+			}
+			if sig == "" {
+				sig, _ = item["thoughtSignature"].(string)
+			}
+
+			var sb strings.Builder
+			extracted := false
+			for _, key := range []string{"summary", "content"} {
+				if extracted {
+					break
+				}
+				if arr, ok := item[key].([]interface{}); ok {
+					for _, rawSeg := range arr {
+						seg, ok := rawSeg.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						if txt, ok := seg["text"].(string); ok && txt != "" {
+							sb.WriteString(txt)
+							extracted = true
+						}
+					}
+				}
+			}
+			thoughtText := sb.String()
+			if thoughtText == "" {
+				thoughtText, _ = item["text"].(string)
+			}
+
+			if thoughtText != "" {
+				if len(sig) >= 80 {
+					// İmzalı düşünce: geçmişe model turunun thought part'ı olarak birebir geri koy
+					contents = append(contents, GeminiContent{
+						Role: "model",
+						Parts: []GeminiPart{{
+							Text:             thoughtText,
+							Thought:          true,
+							ThoughtSignature: sig,
+						}},
+					})
+				} else {
+					// İmzasız düşünce parçası Google güvenlik duvarınca reddedilir → güvenle düşür.
+					// (Düşünce metni bağlam için gerekli değildir; modelin çıktısı zaten sonraki part'lardadır.)
+					cPID := 0
+					cProc := "İstemci"
+					cAcc := ""
+					if len(ctx) > 0 {
+						cPID = ctx[0].PID
+						cProc = ctx[0].ProcessName
+						cAcc = ctx[0].Account
+					}
+					if GlobalDiagnosticLogger != nil {
+						GlobalDiagnosticLogger.LogRescue(
+							cPID, cProc, cAcc, "",
+							"Düşünce Geri Beslemesi (Reasoning Round-Trip)",
+							"Reasoning item geçerli thoughtSignature (encrypted_content) içermediği için imzasız düşünce parçası güvenle düşürüldü (HTTP 400 engellendi).",
+							map[string]interface{}{
+								"item_id":   item["id"],
+								"mechanism": "Reasoning Round-Trip",
+							},
+						)
+					}
+				}
+			}
+			continue
+		}
+
 		// 3. Assistant / Model Message
 		if role == "assistant" || role == "model" {
 			var parts []GeminiPart
 			if content := item["content"]; content != nil {
 				text := extractStringFromContent(content)
 				if text != "" {
-					parts = append(parts, GeminiPart{Text: text})
+					tp := GeminiPart{Text: text}
+					// Metin parçası thoughtSignature geri koyması: stream_translator imzayı
+					// "txt:<mesaj-item-id>" anahtarıyla saklar; DSH mesaj item id'sini birebir
+					// geri gönderdiğinden Google'ın imzası geçmişteki yerine geri konur
+					// (KV-cache prefix sadakati + imza zinciri).
+					if msgID, ok := item["id"].(string); ok && msgID != "" {
+						if ts := GlobalThoughtStore.Get("txt:"+msgID, "text"); len(ts) >= 80 {
+							tp.ThoughtSignature = ts
+						}
+					}
+					parts = append(parts, tp)
 				}
 			}
 
@@ -820,15 +960,18 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 					toolCallNames[callID] = name
 
 					argsMap := make(map[string]interface{})
+					var rawArgs json.RawMessage
 					if argStr, ok := fn["arguments"].(string); ok {
+						rawArgs = json.RawMessage(argStr)
 						_ = json.Unmarshal([]byte(argStr), &argsMap)
 					}
 
 					part := GeminiPart{
 						FunctionCall: &GeminiFunctionCall{
-							ID:   callID,
-							Name: name,
-							Args: argsMap,
+							ID:      callID,
+							Name:    name,
+							Args:    argsMap,
+							ArgsRaw: rawArgs,
 						},
 					}
 					clientSig, _ := fn["thought_signature"].(string)
@@ -846,9 +989,9 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 					if len(sig) >= 80 {
 						part.ThoughtSignature = sig
 					} else {
-						argsBytes, _ := json.Marshal(argsMap)
+						argsText := (&GeminiFunctionCall{Args: argsMap, ArgsRaw: rawArgs}).ArgsJSON()
 						part = GeminiPart{
-							Text: fmt.Sprintf("[Araç Çağrısı: %s(%s)]", name, string(argsBytes)),
+							Text: fmt.Sprintf("[Araç Çağrısı: %s(%s)]", name, argsText),
 						}
 
 						// 🟢 Geri Bildirim / Kurtarma Logu
@@ -897,15 +1040,18 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 			toolCallNames[callID] = name
 
 			argsMap := make(map[string]interface{})
+			var rawArgs json.RawMessage
 			if argStr, ok := item["arguments"].(string); ok {
+				rawArgs = json.RawMessage(argStr)
 				_ = json.Unmarshal([]byte(argStr), &argsMap)
 			}
 
 			part := GeminiPart{
 				FunctionCall: &GeminiFunctionCall{
-					ID:   callID,
-					Name: name,
-					Args: argsMap,
+					ID:      callID,
+					Name:    name,
+					Args:    argsMap,
+					ArgsRaw: rawArgs,
 				},
 			}
 			clientSig, _ := item["thought_signature"].(string)
@@ -921,9 +1067,9 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 			if len(sig) >= 80 {
 				part.ThoughtSignature = sig
 			} else {
-				argsBytes, _ := json.Marshal(argsMap)
+				argsText := (&GeminiFunctionCall{Args: argsMap, ArgsRaw: rawArgs}).ArgsJSON()
 				part = GeminiPart{
-					Text: fmt.Sprintf("[Araç Çağrısı: %s(%s)]", name, string(argsBytes)),
+					Text: fmt.Sprintf("[Araç Çağrısı: %s(%s)]", name, argsText),
 				}
 
 				// 🟢 Geri Bildirim / Kurtarma Logu
@@ -1057,6 +1203,25 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 				})
 			}
 			continue
+		}
+	}
+
+	// 6. Durumlu Responses: previous_response_id ile sunucu tarafı sohbet durumu birleştirme.
+	// Kayıtlı içerik (önceki turlar + model çıktısı; thoughtSignature'lar ve ham args ile
+	// bayt-bayt sadık) yeni input item'larının ÖNÜNE eklenir, sessionId sürdürülür (cache affinity).
+	prevRespID, _ := body["previous_response_id"].(string)
+	if strings.TrimSpace(prevRespID) != "" {
+		prevRespID = strings.TrimSpace(prevRespID)
+		if st, ok := GlobalResponseStore.Get(prevRespID); ok {
+			contents = append(append([]GeminiContent{}, st.Contents...), contents...)
+			if customSessionID == "" {
+				customSessionID = st.SessionID
+			}
+			if extractedSystemPrompt == "" {
+				extractedSystemPrompt = st.SystemPrompt
+			}
+		} else {
+			log.Printf("[⚠️ previous_response_id] '%s' bulunamadı (süre dolmuş/silinmiş olabilir); istek yalnızca yeni input ile işlendi.", prevRespID)
 		}
 	}
 

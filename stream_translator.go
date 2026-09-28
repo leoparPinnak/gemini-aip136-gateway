@@ -17,10 +17,10 @@ type StreamTranslator struct {
 	isResponsesAPI bool
 	modelName      string
 
-	responseID          string
-	outputItemID        string
-	reasoningItemID     string
-	callItemID          string
+	responseID      string
+	outputItemID    string
+	reasoningItemID string
+	callItemID      string
 
 	hasStartedReasoning  bool
 	hasEndedReasoning    bool
@@ -33,14 +33,23 @@ type StreamTranslator struct {
 	fullThoughtText      strings.Builder
 	activeFnCalls        []map[string]interface{}
 
-	promptTokens   int
-	outputTokens   int
-	cachedTokens   int
-	totalTokens    int
+	// Model turu sadakati (cache-sadakat): modelin ürettiği part'lar Google'ın
+	// gönderdiği bayt sırasıyla (ham args + thoughtSignature'lar) biriktirilir;
+	// GET/previous_response_id durum deposuna bu haliyle yazılır.
+	modelParts []GeminiPart
+	fnCallSeq  int    // akış içi benzersiz çağrı sayacı (paralel çağrı id çakışması önlenir)
+	thoughtSig string // thought part'ındaki son geçerli thoughtSignature (encrypted_content olarak taşınır)
+	textSig    string // nihai metin part'ındaki thoughtSignature ("txt:<item-id>" olarak saklanır)
+
+	promptTokens     int
+	outputTokens     int
+	cachedTokens     int
+	totalTokens      int
+	thoughtTokens    int // Google'ın gerçek thoughtsTokenCount değeri (usageMetadata)
 	pid              int
 	processName      string
 	lastFinishReason string
-	lastTraceID      string // A2: Google'ın döndürdüğü traceId (JSONL korelasyonu)
+	lastTraceID      string          // A2: Google'ın döndürdüğü traceId (JSONL korelasyonu)
 	lastUsageRaw     json.RawMessage // A4: son usageMetadata ham (cached==0 analizi)
 	mu               sync.Mutex
 }
@@ -74,21 +83,28 @@ func NewStreamTranslator(w http.ResponseWriter, isResponsesAPI bool, modelName s
 func (st *StreamTranslator) ensureReasoningEnded() {
 	if st.isResponsesAPI && st.hasStartedReasoning && !st.hasEndedReasoning {
 		st.hasEndedReasoning = true
+		item := map[string]interface{}{
+			"id":     st.reasoningItemID,
+			"type":   "reasoning",
+			"status": "completed",
+			"content": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": st.fullThoughtText.String(),
+				},
+			},
+		}
+		// thoughtSignature'ı encrypted_content içinde taşı: DSH/pi-ai reasoning item'ını
+		// verbatim geri gönderdiğinden imza round-trip olur ve düşünce part'ı geçmişe
+		// imzalı olarak geri konabilir (KV-cache prefix sadakati + imza zinciri).
+		if st.thoughtSig != "" {
+			item["encrypted_content"] = st.thoughtSig
+		}
 		st.sendSSE("response.output_item.done", map[string]interface{}{
 			"type":         "response.output_item.done",
 			"response_id":  st.responseID,
 			"output_index": st.reasoningOutputIndex,
-			"item": map[string]interface{}{
-				"id":     st.reasoningItemID,
-				"type":   "reasoning",
-				"status": "completed",
-				"content": []map[string]interface{}{
-					{
-						"type": "text",
-						"text": st.fullThoughtText.String(),
-					},
-				},
-			},
+			"item":         item,
 		})
 	}
 }
@@ -122,6 +138,49 @@ func (st *StreamTranslator) sendRawSSE(data string) {
 	}
 }
 
+// appendModelText, model turu part'larını Google'ın ürettiği sırayla biriktirir.
+// Ardışık aynı-tür delta'lar TEK part'ta birleşir (kamu API'sinin tarihçe yeniden
+// gönderim konvansiyonu); imza son part'a iliştirilir.
+func (st *StreamTranslator) appendModelText(text string, thought bool, sig string) {
+	if n := len(st.modelParts); n > 0 {
+		last := &st.modelParts[n-1]
+		if last.FunctionCall == nil && last.FunctionResponse == nil && last.Thought == thought {
+			last.Text += text
+			if sig != "" {
+				last.ThoughtSignature = sig
+			}
+			return
+		}
+	}
+	st.modelParts = append(st.modelParts, GeminiPart{Text: text, Thought: thought, ThoughtSignature: sig})
+}
+
+// mapChatFinishReason, Google finishReason → OpenAI finish_reason eşlemesi.
+// (Eski davranış: her durumda "stop" — MAX_TOKENS/SAFETY kayboluyordu.)
+func mapChatFinishReason(geminiReason string, hasFnCalls bool) string {
+	if hasFnCalls {
+		return "tool_calls"
+	}
+	switch geminiReason {
+	case "MAX_TOKENS":
+		return "length"
+	case "SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "IMAGE_SAFETY":
+		return "content_filter"
+	default:
+		return "stop"
+	}
+}
+
+// ModelTurnParts, bu yanıtın model turunu (thought + text + functionCall part'ları,
+// ham args ve thoughtSignature'lar dahil) bayt-sadık haliyle döndürür.
+func (st *StreamTranslator) ModelTurnParts() []GeminiPart {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	out := make([]GeminiPart, len(st.modelParts))
+	copy(out, st.modelParts)
+	return out
+}
+
 func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 	// A2: Google traceId / modelVersion yakala (JSONL korelasyonu)
 	if chunk.Response.TraceID != "" {
@@ -149,6 +208,9 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 		}
 		if usage.TotalTokenCount > 0 {
 			st.totalTokens = usage.TotalTokenCount
+		}
+		if usage.ThoughtsTokenCount > 0 {
+			st.thoughtTokens = usage.ThoughtsTokenCount
 		}
 		// A4: son usage'ın ham hali — cached==0 satırlarında "gerçek 0" mı
 		// "STOP gelmemiş kayıp 0" mı ayrıştırılır.
@@ -180,6 +242,10 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 		// 1. Thought / Reasoning
 		if part.Thought && part.Text != "" {
 			st.fullThoughtText.WriteString(part.Text)
+			if part.ThoughtSignature != "" {
+				st.thoughtSig = part.ThoughtSignature // reasoning item → encrypted_content
+			}
+			st.appendModelText(part.Text, true, part.ThoughtSignature)
 
 			if st.isResponsesAPI {
 				if !st.hasEmittedHeader {
@@ -188,9 +254,13 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 						"type":        "response.created",
 						"response_id": st.responseID,
 						"response": map[string]interface{}{
-							"id":     st.responseID,
-							"status": "in_progress",
-							"model":  st.modelName,
+							"id":         st.responseID,
+							"object":     "response",
+							"created_at": time.Now().Unix(),
+							"status":     "in_progress",
+							"model":      st.modelName,
+							"output":     []interface{}{},
+							"usage":      nil,
 						},
 					})
 				}
@@ -239,6 +309,10 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 		if part.Text != "" {
 			st.ensureReasoningEnded()
 			st.fullOutputText.WriteString(part.Text)
+			if part.ThoughtSignature != "" {
+				st.textSig = part.ThoughtSignature // nihai metin part'ı imzası ("txt:<item-id>" olarak saklanır)
+			}
+			st.appendModelText(part.Text, false, part.ThoughtSignature)
 
 			if st.isResponsesAPI {
 				if !st.hasEmittedHeader {
@@ -247,9 +321,13 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 						"type":        "response.created",
 						"response_id": st.responseID,
 						"response": map[string]interface{}{
-							"id":     st.responseID,
-							"status": "in_progress",
-							"model":  st.modelName,
+							"id":         st.responseID,
+							"object":     "response",
+							"created_at": time.Now().Unix(),
+							"status":     "in_progress",
+							"model":      st.modelName,
+							"output":     []interface{}{},
+							"usage":      nil,
 						},
 					})
 				}
@@ -268,6 +346,19 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 							"status":  "in_progress",
 							"role":    "assistant",
 							"content": []interface{}{},
+						},
+					})
+					// Resmi şema + plans/01 §3.3: mesaj item'ının içerik parçası bildirilir
+					st.sendSSE("response.content_part.added", map[string]interface{}{
+						"type":          "response.content_part.added",
+						"response_id":   st.responseID,
+						"item_id":       st.outputItemID,
+						"output_index":  st.textOutputIndex,
+						"content_index": 0,
+						"part": map[string]interface{}{
+							"type":        "output_text",
+							"text":        "",
+							"annotations": []interface{}{},
 						},
 					})
 				}
@@ -304,7 +395,10 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 			fn := part.FunctionCall
 			callID := fn.ID
 			if callID == "" {
-				callID = st.callItemID
+				// Paralel çağrı id çakışması önlenir: akış içi benzersiz fallback id
+				// (eski davranış: akış başına tek st.callItemID → paralel çağrılar aynı id'yi alıyordu)
+				st.fnCallSeq++
+				callID = fmt.Sprintf("%s_%d", st.callItemID, st.fnCallSeq)
 			}
 			if part.ThoughtSignature != "" {
 				GlobalThoughtStore.Store(callID, fn.Name, part.ThoughtSignature)
@@ -324,8 +418,15 @@ func (st *StreamTranslator) HandleGeminiChunk(chunk *GeminiStreamChunk) {
 				)
 			}
 
-			argsBytes, _ := json.Marshal(fn.Args)
-			argsStr := string(argsBytes)
+			// Cache-sadakat: model turuna Google'ın ürettiği ham args + imza ile ekle.
+			// (Gemini tarafı id'siz üretilmişse id EKLENMEZ — bayt sadakati korunur.)
+			st.modelParts = append(st.modelParts, GeminiPart{
+				FunctionCall:     &GeminiFunctionCall{ID: fn.ID, Name: fn.Name, Args: fn.Args, ArgsRaw: fn.ArgsRaw},
+				ThoughtSignature: part.ThoughtSignature,
+			})
+
+			// Ham args bayt-bayt akıtılır (yeniden marshal → anahtar sırası kaybı YOK)
+			argsStr := fn.ArgsJSON()
 
 			st.activeFnCalls = append(st.activeFnCalls, map[string]interface{}{
 				"id":        callID,
@@ -452,9 +553,13 @@ func (st *StreamTranslator) FinishStream() bool {
 					"type":        "response.created",
 					"response_id": st.responseID,
 					"response": map[string]interface{}{
-						"id":     st.responseID,
-						"status": "in_progress",
-						"model":  st.modelName,
+						"id":         st.responseID,
+						"object":     "response",
+						"created_at": time.Now().Unix(),
+						"status":     "in_progress",
+						"model":      st.modelName,
+						"output":     []interface{}{},
+						"usage":      nil,
 					},
 				})
 			}
@@ -470,6 +575,19 @@ func (st *StreamTranslator) FinishStream() bool {
 						"status":  "in_progress",
 						"role":    "assistant",
 						"content": []interface{}{},
+					},
+				})
+				// Resmi şema: içerik parçası bildirimi (fallback yolu dahil tutarlılık)
+				st.sendSSE("response.content_part.added", map[string]interface{}{
+					"type":          "response.content_part.added",
+					"response_id":   st.responseID,
+					"item_id":       st.outputItemID,
+					"output_index":  st.textOutputIndex,
+					"content_index": 0,
+					"part": map[string]interface{}{
+						"type":        "output_text",
+						"text":        "",
+						"annotations": []interface{}{},
 					},
 				})
 			}
@@ -501,8 +619,36 @@ func (st *StreamTranslator) FinishStream() bool {
 	if st.isResponsesAPI {
 		st.ensureReasoningEnded()
 
+		// Nihai metin part'ı thoughtSignature'ı: mesaj item id'siyle sakla —
+		// istemci mesaj item'ını geri gönderdiğinde imza geçmişteki yerine konur.
+		if st.textSig != "" {
+			GlobalThoughtStore.Store("txt:"+st.outputItemID, "text", st.textSig)
+		}
+
 		// Crucial fix for DSH: output_item.done MUST contain the accumulated output_text!
 		if fullText != "" || st.hasStartedItem {
+			// Resmi şema + plans/01 §3.7: içerik parçası ve metin tamamlanma olayları
+			st.sendSSE("response.output_text.done", map[string]interface{}{
+				"type":          "response.output_text.done",
+				"response_id":   st.responseID,
+				"item_id":       st.outputItemID,
+				"output_index":  st.textOutputIndex,
+				"content_index": 0,
+				"text":          fullText,
+				"logprobs":      []interface{}{},
+			})
+			st.sendSSE("response.content_part.done", map[string]interface{}{
+				"type":          "response.content_part.done",
+				"response_id":   st.responseID,
+				"item_id":       st.outputItemID,
+				"output_index":  st.textOutputIndex,
+				"content_index": 0,
+				"part": map[string]interface{}{
+					"type":        "output_text",
+					"text":        fullText,
+					"annotations": []interface{}{},
+				},
+			})
 			st.sendSSE("response.output_item.done", map[string]interface{}{
 				"type":         "response.output_item.done",
 				"response_id":  st.responseID,
@@ -522,76 +668,26 @@ func (st *StreamTranslator) FinishStream() bool {
 			})
 		}
 
-		var outputList []map[string]interface{}
-		if st.hasStartedReasoning {
-			outputList = append(outputList, map[string]interface{}{
-				"id":     st.reasoningItemID,
-				"type":   "reasoning",
-				"status": "completed",
-				"content": []map[string]interface{}{
-					{
-						"type": "text",
-						"text": st.fullThoughtText.String(),
-					},
-				},
-			})
-		}
-		if fullText != "" {
-			outputList = append(outputList, map[string]interface{}{
-				"id":     st.outputItemID,
-				"type":   "message",
-				"status": "completed",
-				"role":   "assistant",
-				"content": []map[string]interface{}{
-					{
-						"type": "output_text",
-						"text": fullText,
-					},
-				},
-			})
-		}
-		for _, fn := range st.activeFnCalls {
-			outputList = append(outputList, map[string]interface{}{
-				"id":        fn["id"],
-				"type":      "function_call",
-				"status":    "completed",
-				"name":      fn["name"],
-				"call_id":   fn["id"],
-				"arguments": fn["arguments"],
-			})
+		// Terminal olay: MAX_TOKENS → resmi 'response.incomplete' (status: incomplete,
+		// incomplete_details: max_output_tokens). DSH/pi-ai her ikisini de terminal
+		// olarak işler (openai-responses-shared.js → finalizeResponse).
+		termEvent := "response.completed"
+		termStatus := "completed"
+		if st.lastFinishReason == "MAX_TOKENS" {
+			termEvent = "response.incomplete"
+			termStatus = "incomplete"
 		}
 
-		approxReasoningTokens := len(st.fullThoughtText.String()) / 4
-		respTotalTokens := st.totalTokens
-		if respTotalTokens == 0 {
-			respTotalTokens = st.promptTokens + st.outputTokens
+		respObj := st.buildResponseObject(termStatus)
+		if termStatus == "incomplete" {
+			respObj["incomplete_details"] = map[string]interface{}{"reason": "max_output_tokens"}
 		}
-
-		st.sendSSE("response.completed", map[string]interface{}{
-			"type": "response.completed",
-			"response": map[string]interface{}{
-				"id":     st.responseID,
-				"status": "completed",
-				"model":  st.modelName,
-				"output": outputList,
-				"usage": map[string]interface{}{
-					"input_tokens":  st.promptTokens,
-					"output_tokens": st.outputTokens,
-					"total_tokens":  respTotalTokens,
-					"input_tokens_details": map[string]interface{}{
-						"cached_tokens": st.cachedTokens,
-					},
-					"output_tokens_details": map[string]interface{}{
-						"reasoning_tokens": approxReasoningTokens,
-					},
-				},
-			},
+		st.sendSSE(termEvent, map[string]interface{}{
+			"type":     termEvent,
+			"response": respObj,
 		})
 	} else {
-		finishReason := "stop"
-		if len(st.activeFnCalls) > 0 {
-			finishReason = "tool_calls"
-		}
+		finishReason := mapChatFinishReason(st.lastFinishReason, len(st.activeFnCalls) > 0)
 
 		outTok := st.outputTokens
 		if outTok == 0 && (st.fullOutputText.Len() > 0 || st.fullThoughtText.Len() > 0) {
@@ -613,6 +709,15 @@ func (st *StreamTranslator) FinishStream() bool {
 			"prompt_tokens_details": map[string]interface{}{
 				"cached_tokens": st.cachedTokens,
 			},
+		}
+		reasoningTok := st.thoughtTokens
+		if reasoningTok == 0 {
+			reasoningTok = st.fullThoughtText.Len() / 4
+		}
+		if reasoningTok > 0 {
+			usageObj["completion_tokens_details"] = map[string]interface{}{
+				"reasoning_tokens": reasoningTok,
+			}
 		}
 
 		// 1. Send stop chunk with usage
@@ -644,4 +749,104 @@ func (st *StreamTranslator) FinishStream() bool {
 		st.sendRawSSE("[DONE]")
 	}
 	return truncated
+}
+
+// buildResponseObject, resmi OpenAI "response" yanıt nesnesini (output + usage) kurar.
+// Hem terminal SSE olayı (response.completed / response.incomplete) hem de
+// non-stream JSON yanıtı (stream: false) için ortak gövde — tek doğruluk kaynağı.
+func (st *StreamTranslator) buildResponseObject(status string) map[string]interface{} {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	fullText := st.fullOutputText.String()
+
+	var outputList []map[string]interface{}
+	if st.hasStartedReasoning {
+		reasoningItem := map[string]interface{}{
+			"id":     st.reasoningItemID,
+			"type":   "reasoning",
+			"status": "completed",
+			"content": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": st.fullThoughtText.String(),
+				},
+			},
+		}
+		// DSH/pi-ai reasoning item'ını verbatim geri gönderir; imza encrypted_content
+		// içinde dolaşırsa düşünce part'ı geçmişe imzalı geri konabilir (cache HIT).
+		if st.thoughtSig != "" {
+			reasoningItem["encrypted_content"] = st.thoughtSig
+		}
+		outputList = append(outputList, reasoningItem)
+	}
+	if fullText != "" {
+		outputList = append(outputList, map[string]interface{}{
+			"id":     st.outputItemID,
+			"type":   "message",
+			"status": "completed",
+			"role":   "assistant",
+			"content": []map[string]interface{}{
+				{
+					"type":        "output_text",
+					"text":        fullText,
+					"annotations": []interface{}{},
+				},
+			},
+		})
+	}
+	for _, fn := range st.activeFnCalls {
+		outputList = append(outputList, map[string]interface{}{
+			"id":        fn["id"],
+			"type":      "function_call",
+			"status":    "completed",
+			"name":      fn["name"],
+			"call_id":   fn["id"],
+			"arguments": fn["arguments"],
+		})
+	}
+
+	// Gerçek thoughtsTokenCount öncelikli; Google vermediyse karakter/4 tahmini
+	reasoningTokens := st.thoughtTokens
+	if reasoningTokens == 0 {
+		reasoningTokens = len(st.fullThoughtText.String()) / 4
+	}
+	respTotalTokens := st.totalTokens
+	if respTotalTokens == 0 {
+		respTotalTokens = st.promptTokens + st.outputTokens
+	}
+
+	return map[string]interface{}{
+		"id":         st.responseID,
+		"object":     "response",
+		"created_at": time.Now().Unix(),
+		"status":     status,
+		"model":      st.modelName,
+		"output":     outputList,
+		"usage": map[string]interface{}{
+			"input_tokens":  st.promptTokens,
+			"output_tokens": st.outputTokens,
+			"total_tokens":  respTotalTokens,
+			"input_tokens_details": map[string]interface{}{
+				"cached_tokens": st.cachedTokens,
+			},
+			"output_tokens_details": map[string]interface{}{
+				"reasoning_tokens": reasoningTokens,
+			},
+		},
+	}
+}
+
+// BuildResponseObject, akış durumundan resmi yanıt nesnesini üretir (non-stream yol).
+// MAX_TOKENS'ta status: "incomplete" + incomplete_details döner.
+func (st *StreamTranslator) BuildResponseObject() map[string]interface{} {
+	status := "completed"
+	if st.lastFinishReason == "MAX_TOKENS" {
+		status = "incomplete"
+	}
+	obj := st.buildResponseObject(status)
+	if status == "incomplete" {
+		obj["incomplete_details"] = map[string]interface{}{"reason": "max_output_tokens"}
+	}
+	return obj
 }

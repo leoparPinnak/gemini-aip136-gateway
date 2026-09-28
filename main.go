@@ -545,6 +545,15 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 		modelName = "gemini-3.8-flash-medium"
 	}
 
+	// Resmi Responses API'de stream varsayılanı false'tur; ancak eski gateway
+	// davranışı (alan yoksa her zaman SSE) mevcut istemcilerin varsayımıdır —
+	// geriye uyumluluk için YALNIZCA açıkça stream:false istekleri non-stream
+	// JSON yanıtı alır (bu yol önceden hiç çalışmıyordu).
+	isStream := true
+	if s, ok := parsed["stream"].(bool); ok {
+		isStream = s
+	}
+
 	// Override yapıldı mı?
 	ovSettings := GlobalSettingsManager.Get()
 	isOverridden := ovSettings.OverrideEnabled
@@ -580,12 +589,18 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[POST /v1/responses] PID: %d (%s) | Hesap: %s [%s] | Model: %s -> %s\n",
 		pid, displayName, targetEmail, ruleName, modelName, targetModel)
 
-	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache, no-transform")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-
-	translator := NewStreamTranslator(w, true, modelName, pCtx)
+	var translator *StreamTranslator
+	if isStream {
+		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache, no-transform")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("X-Accel-Buffering", "no")
+		translator = NewStreamTranslator(w, true, modelName, pCtx)
+	} else {
+		// Non-stream: aynı birikimci çalışır, SSE olayları discard'a gider;
+		// yanıt BuildResponseObject() ile tek JSON olarak yazılır.
+		translator = NewStreamTranslator(discardResponseWriter{}, true, modelName, pCtx)
+	}
 
 	ci := &ConnInfo{}
 	err = GlobalGeminiClient.StreamGenerateContentWithAccount(payload, targetAcc, ci, func(chunk *GeminiStreamChunk) error {
@@ -599,15 +614,31 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[❌ /v1/responses Hata]: %v\n", err)
 		statusCode := parseStatusCodeFromError(err)
 		GlobalDiagnosticLogger.LogHttpError(pid, displayName, targetEmail, targetModel, statusCode, err.Error(), map[string]interface{}{
-			"endpoint":    "/v1/responses",
+			"endpoint":      "/v1/responses",
 			"applied_model": targetModel,
-			"duration_ms": elapsed,
+			"duration_ms":   elapsed,
 		})
 
-		errData, _ := json.Marshal(map[string]interface{}{
-			"error": err.Error(),
-		})
-		fmt.Fprintf(w, "event: error\ndata: %s\n\n", string(errData))
+		if isStream {
+			// DSH/pi-ai hata olayı şeması: {type: "error", code, message}
+			errData, _ := json.Marshal(map[string]interface{}{
+				"type":    "error",
+				"code":    statusCode,
+				"message": err.Error(),
+			})
+			fmt.Fprintf(w, "event: error\ndata: %s\n\n", string(errData))
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(statusCode)
+			errData, _ := json.Marshal(map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": err.Error(),
+					"type":    "gemini_gateway_error",
+					"code":    statusCode,
+				},
+			})
+			_, _ = w.Write(errData)
+		}
 
 		reqInfo.Status = "error"
 		reqInfo.DurationMs = elapsed
@@ -630,6 +661,16 @@ func handleResponses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	truncated := translator.FinishStream()
+
+	// Durumlu Responses: sohbet durumunu kaydetr (previous_response_id zinciri).
+	// Kayıtlı içerik thoughtSignature'lar ve ham args ile bayt-sadıktır → sonraki
+	// turun prefix'i Google'ın örtük KV-cache'i ile birebir örtüşür (cache HIT).
+	respObj := translator.BuildResponseObject()
+	saveResponseState(payload, translator, respObj)
+	if !isStream {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(respObj)
+	}
 
 	atomic.AddUint64(&totalInputTokens, uint64(translator.promptTokens))
 	atomic.AddUint64(&totalOutputTokens, uint64(translator.outputTokens))
@@ -864,6 +905,8 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		var fnCalls []GeminiFunctionCall
 		var usage *GeminiUsageMetadata
 		var lastTrace string
+		lastFinish := ""
+		fnCallSeq := 0
 
 		ci := &ConnInfo{}
 		err = GlobalGeminiClient.StreamGenerateContentWithAccount(payload, targetAcc, ci, func(chunk *GeminiStreamChunk) error {
@@ -884,6 +927,9 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			}
 
 			for _, c := range candidates {
+				if c.FinishReason != "" {
+					lastFinish = c.FinishReason
+				}
 				for _, p := range c.Content.Parts {
 					if p.Thought {
 						thoughtText.WriteString(p.Text)
@@ -891,11 +937,17 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 						outputText.WriteString(p.Text)
 					}
 					if p.FunctionCall != nil {
-						fnCalls = append(fnCalls, *p.FunctionCall)
+						fn := *p.FunctionCall
+						if fn.ID == "" {
+							// Paralel çağrı id çakışması önlenir (benzersiz fallback id)
+							fnCallSeq++
+							fn.ID = fmt.Sprintf("call_%d_%d", reqStart.UnixMilli(), fnCallSeq)
+						}
+						fnCalls = append(fnCalls, fn)
 						// B2: non-stream yolda da imza depolanır (akışla tutarlılık);
 						// eskiden hiç saklanmıyor, sonraki turlarda imzasız kalıyordu.
 						if p.ThoughtSignature != "" {
-							GlobalThoughtStore.Store(p.FunctionCall.ID, p.FunctionCall.Name, p.ThoughtSignature)
+							GlobalThoughtStore.Store(fn.ID, fn.Name, p.ThoughtSignature)
 						}
 					}
 				}
@@ -1003,6 +1055,44 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[⚠️ Gateway Fallback] Non-streaming model '%s' (PID: %d) boş yanıt döndü. Boş yanıt koruma kalkanı devreye girdi.\n", modelName, pid)
 		}
 
+		// Kırık non-stream gövdesi onarımı: tool_calls ve reasoning_content artık
+		// yanıt mesajına YAZILIYOR (eski davranış: sessizce kayboluyordu).
+		msg := map[string]interface{}{
+			"role":    "assistant",
+			"content": outText,
+		}
+		if thoughtText.Len() > 0 {
+			msg["reasoning_content"] = thoughtText.String()
+		}
+		if len(fnCalls) > 0 {
+			tcs := make([]map[string]interface{}, 0, len(fnCalls))
+			for i := range fnCalls {
+				tcs = append(tcs, map[string]interface{}{
+					"id":   fnCalls[i].ID,
+					"type": "function",
+					"function": map[string]interface{}{
+						"name":      fnCalls[i].Name,
+						"arguments": fnCalls[i].ArgsJSON(),
+					},
+				})
+			}
+			msg["tool_calls"] = tcs
+		}
+
+		usageObj := map[string]interface{}{
+			"prompt_tokens":     promptTokens,
+			"completion_tokens": outputTokens,
+			"total_tokens":      promptTokens + outputTokens,
+			"prompt_tokens_details": map[string]interface{}{
+				"cached_tokens": cachedTokens,
+			},
+		}
+		if usage != nil && usage.ThoughtsTokenCount > 0 {
+			usageObj["completion_tokens_details"] = map[string]interface{}{
+				"reasoning_tokens": usage.ThoughtsTokenCount,
+			}
+		}
+
 		resp := map[string]interface{}{
 			"id":      reqID,
 			"object":  "chat.completion",
@@ -1010,26 +1100,95 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			"model":   modelName,
 			"choices": []map[string]interface{}{
 				{
-					"index": 0,
-					"message": map[string]interface{}{
-						"role":    "assistant",
-						"content": outText,
-					},
-					"finish_reason": "stop",
+					"index":         0,
+					"message":       msg,
+					"finish_reason": mapChatFinishReason(lastFinish, len(fnCalls) > 0),
 				},
 			},
-			"usage": map[string]interface{}{
-				"prompt_tokens":     promptTokens,
-				"completion_tokens": outputTokens,
-				"total_tokens":      promptTokens + outputTokens,
-				"prompt_tokens_details": map[string]interface{}{
-					"cached_tokens": cachedTokens,
-				},
-			},
+			"usage": usageObj,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
+	}
+}
+
+// discardResponseWriter, StreamTranslator'ı SSE yazmadan biriktirme modunda
+// çalıştırmak için http.ResponseWriter+Flusher taklidi (non-stream /v1/responses).
+type discardResponseWriter struct{}
+
+func (discardResponseWriter) Header() http.Header         { return http.Header{} }
+func (discardResponseWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (discardResponseWriter) WriteHeader(int)             {}
+func (discardResponseWriter) Flush()                      {}
+
+// saveResponseState, durumlu Responses (previous_response_id) için sohbet durumunu
+// kaydeder: kayıtlı içerik thoughtSignature'lar ve ham args ile bayt-sadıktır —
+// sonraki turun prefix'i Google'ın örtük KV-cache'i ile birebir örtüşür (cache HIT).
+func saveResponseState(payload *GeminiAipPayload, st *StreamTranslator, respObj map[string]interface{}) {
+	if GlobalResponseStore == nil || payload == nil || st == nil {
+		return
+	}
+	modelParts := st.ModelTurnParts()
+	if len(modelParts) == 0 {
+		return
+	}
+	contents := make([]GeminiContent, 0, len(payload.Request.Contents)+1)
+	contents = append(contents, payload.Request.Contents...)
+	contents = append(contents, GeminiContent{Role: "model", Parts: modelParts})
+
+	systemPrompt := ""
+	if payload.Request.SystemInstruction != nil {
+		var sb strings.Builder
+		for _, p := range payload.Request.SystemInstruction.Parts {
+			sb.WriteString(p.Text)
+		}
+		systemPrompt = sb.String()
+	}
+
+	GlobalResponseStore.Save(ResponseState{
+		ResponseID:   st.responseID,
+		SessionID:    payload.Request.SessionID,
+		SystemPrompt: systemPrompt,
+		Contents:     contents,
+		ResponseObj:  respObj,
+	})
+}
+
+// handleResponseItem, GET/DELETE /v1/responses/{id} — durumlu Responses tamamlayıcısı.
+func handleResponseItem(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/v1/responses/")
+	id = strings.TrimPrefix(id, "/responses/")
+	id = strings.Trim(id, "/")
+	w.Header().Set("Content-Type", "application/json")
+	if id == "" {
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": map[string]interface{}{"message": "response id missing", "type": "not_found_error"},
+		})
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		if st, ok := GlobalResponseStore.Get(id); ok {
+			_ = json.NewEncoder(w).Encode(st.ResponseObj)
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": map[string]interface{}{"message": "response not found: " + id, "type": "not_found_error"},
+			})
+		}
+	case http.MethodDelete:
+		if GlobalResponseStore.Delete(id) {
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": id, "object": "response.deleted", "deleted": true})
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": map[string]interface{}{"message": "response not found: " + id, "type": "not_found_error"},
+			})
+		}
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
@@ -1074,6 +1233,8 @@ func main() {
 	mux.HandleFunc("/models", handleModels)
 	mux.HandleFunc("/v1/responses", handleResponses)
 	mux.HandleFunc("/responses", handleResponses)
+	mux.HandleFunc("/v1/responses/", handleResponseItem)
+	mux.HandleFunc("/responses/", handleResponseItem)
 	mux.HandleFunc("/v1/chat/completions", handleChatCompletions)
 	mux.HandleFunc("/chat/completions", handleChatCompletions)
 

@@ -43,6 +43,7 @@ type GeminiUsageMetadata struct {
 	CandidatesTokenCount    int `json:"candidatesTokenCount"`
 	TotalTokenCount         int `json:"totalTokenCount"`
 	CachedContentTokenCount int `json:"cachedContentTokenCount"`
+	ThoughtsTokenCount      int `json:"thoughtsTokenCount"`
 }
 
 type GeminiPromptFeedback struct {
@@ -76,11 +77,11 @@ type GeminiStreamChunk struct {
 // WaitMs: istek gönderildikten GotConn'a kadar geçen süre (bağlantı kurulum
 // veya havuzdan yeniden kullanım gecikmesi — proxy transport havuzu C1 ölçümü).
 type ConnInfo struct {
-	Reused         bool
-	WasIdle        bool
-	WaitMs         int64
-	UpstreamTrace string // yanıt header'ı x-request-id / server-timing
-	Headers        map[string]string // tüm yanıt header'ları (miss dump teşhisi)
+	Reused        bool
+	WasIdle       bool
+	WaitMs        int64
+	UpstreamTrace string            // yanıt header'ı x-request-id / server-timing
+	Headers       map[string]string // tüm yanıt header'ları (miss dump teşhisi)
 }
 
 type GeminiClient struct {
