@@ -158,15 +158,19 @@ func TestReasoningRoundTrip(t *testing.T) {
 	}
 }
 
-// Narration kuralı: istek anında enjeksiyon + idempotentlik + kapatma anahtarı
+// Narration kuralı: enjeksiyon + idempotentlik + kapatma anahtarı + hariç tutmalar
 func TestNarrationHint(t *testing.T) {
 	saved := GlobalSettingsManager
 	defer func() { GlobalSettingsManager = saved }()
 
-	// 1) Varsayılan (ayar yöneticisi yokken bile AÇIK): kural sistem isteminin
-	//    SONUNDA ve TEK KEZ basılır; istemcinin kendi metni önde kalır.
+	// Kural SADECE araç taşıyan normal ajan turlarına basılır.
+	toolsJSON := `,"tools":[{"type":"function","function":{"name":"t1","parameters":{"type":"object","properties":{}}}}]`
+
+	// 1) Varsayılan (ayar yöneticisi yokken bile AÇIK) + araç VARKEN: kural
+	//    sistem isteminin SONUNDA ve TEK KEZ; istemcinin metni önde kalır.
 	GlobalSettingsManager = nil
-	p1, _, _, _, err := ConvertOpenAiRequestToGemini([]byte(`{"model":"m","input":"hi","instructions":"You are helpful."}`), "sess-test")
+	p1, _, _, _, err := ConvertOpenAiRequestToGemini(
+		[]byte(`{"model":"m","input":"hi","instructions":"You are helpful."`+toolsJSON+`}`), "sess-test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,11 +188,28 @@ func TestNarrationHint(t *testing.T) {
 		t.Errorf("istemci metni önde kalmalı: %s", text1)
 	}
 
-	// 2) İstemci kuralı zaten taşıyorsa (örn. DSH eklentisi): ikinci basım YOK
+	// 1b) ARAÇ YOKSA kural basılmaz (kuralın konusu araç anlatımıdır).
+	p1b, _, _, _, err := ConvertOpenAiRequestToGemini(
+		[]byte(`{"model":"m","input":"hi","instructions":"Plain chat."}`), "sess-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text1b := p1b.Request.SystemInstruction.Parts[0].Text; text1b != "Plain chat." {
+		t.Errorf("araçsız istekte kural eklenmemeli: %s", text1b)
+	}
+
+	// 2) İstemci kuralı zaten taşıyorsa: ikinci basım YOK (idempotent)
 	req2, _ := json.Marshal(map[string]interface{}{
 		"model":        "m",
 		"input":        "hi",
 		"instructions": "Base prompt.\n\n" + NarrationRuleText,
+		"tools": []interface{}{map[string]interface{}{
+			"type": "function",
+			"function": map[string]interface{}{
+				"name":       "t1",
+				"parameters": map[string]interface{}{"type": "object"},
+			},
+		}},
 	})
 	p2, _, _, _, err := ConvertOpenAiRequestToGemini(req2, "sess-test")
 	if err != nil {
@@ -202,26 +223,33 @@ func TestNarrationHint(t *testing.T) {
 		t.Errorf("istemci metni değişmemeli: %s", text2)
 	}
 
-	// 2b) Eski (araç-başına) kural izi taşıyan istemci: yeni kural ÜSTÜNE
-	//     EKLENMEZ — iki zıt kural aynı promptta çelişirdi.
-	reqLegacy, _ := json.Marshal(map[string]interface{}{
-		"model":        "m",
-		"input":        "hi",
-		"instructions": "Base prompt.\n\nTool-call status updates: before each tool call, write one sentence.",
-	})
-	pLegacy, _, _, _, err := ConvertOpenAiRequestToGemini(reqLegacy, "sess-test")
+	// 2b) Eski (araç-başına) kural izi: yeni kural ÜSTÜNE EKLENMEZ.
+	pLegacy, _, _, _, err := ConvertOpenAiRequestToGemini([]byte(
+		`{"model":"m","input":"hi","instructions":"Base prompt.\n\nTool-call status updates: before each tool call, write one sentence."`+toolsJSON+`}`),
+		"sess-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	textLegacy := pLegacy.Request.SystemInstruction.Parts[0].Text
-	if strings.Contains(textLegacy, NarrationRuleMarker) {
+	if textLegacy := pLegacy.Request.SystemInstruction.Parts[0].Text; strings.Contains(textLegacy, NarrationRuleMarker) {
 		t.Errorf("eski kural izi varken yeni kural eklenmemeli: %s", textLegacy)
+	}
+
+	// 2c) İkinci nesil (reasoning-başına tek plan) izi: yeni kural eklenmemeli.
+	pLegacyPlan, _, _, _, err := ConvertOpenAiRequestToGemini([]byte(
+		`{"model":"m","input":"hi","instructions":"Base prompt.\n\n`+NarrationRuleMarkerLegacyPlan+`: after your reasoning phase ends, write ONE plan message."`+toolsJSON+`}`),
+		"sess-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if textLP := pLegacyPlan.Request.SystemInstruction.Parts[0].Text; strings.Contains(textLP, NarrationRuleMarker) {
+		t.Errorf("eski plan kuralı izi varken yeni kural eklenmemeli: %s", textLP)
 	}
 
 	// 3) Kapatma anahtarı: narration_hint=false → kural HİÇ basılmaz
 	f := false
 	GlobalSettingsManager = &SettingsManager{settings: OverrideSettings{NarrationHint: &f}}
-	p3, _, _, _, err := ConvertOpenAiRequestToGemini([]byte(`{"model":"m","input":"hi","instructions":"You are helpful."}`), "sess-test")
+	p3, _, _, _, err := ConvertOpenAiRequestToGemini([]byte(
+		`{"model":"m","input":"hi","instructions":"You are helpful."`+toolsJSON+`}`), "sess-test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,5 +269,57 @@ func TestNarrationHint(t *testing.T) {
 	GlobalSettingsManager.normalize()
 	if !GlobalSettingsManager.NarrationHintEnabled() {
 		t.Errorf("alan yokken varsayılan AÇIK olmalı")
+	}
+	GlobalSettingsManager = nil
+
+	// 5) Compaction ÖZETLEYİCİSİ: motor talimatı ilk turdayken kural BASILMAZ
+	//    (aksi halde özet metnine plan/duyuru satışı karışıp "summary is not
+	//    smaller" validator'ını tetikliyordu — 09-29 13 hata, kural öncesi 0).
+	reqSum, _ := json.Marshal(map[string]interface{}{
+		"model": "m",
+		"input": []interface{}{
+			map[string]interface{}{"role": "user", "content": []interface{}{
+				map[string]interface{}{"type": "input_text", "text": "You are now acting as a compaction engine for this AI coding assistant. Condense the conversation into a structured checkpoint. Output EXACTLY the Markdown structure below."},
+				map[string]interface{}{"type": "input_text", "text": "conversation span..."},
+			}},
+		},
+		"instructions": "System side.",
+		"tools": []interface{}{map[string]interface{}{
+			"type":     "function",
+			"function": map[string]interface{}{"name": "t1", "parameters": map[string]interface{}{"type": "object"}},
+		}},
+	})
+	pSum, _, _, _, err := ConvertOpenAiRequestToGemini(reqSum, "sess-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if textSum := pSum.Request.SystemInstruction.Parts[0].Text; textSum != "System side." {
+		t.Errorf("özetleyici isteğinde kural eklenmemeli: %s", textSum)
+	}
+
+	// 6) Normal turda GEÇMİŞ checkpoint metni VARSA kural yine basılır
+	//    (kalıcı checkpoint metni istek-özel motor talimatıyla karıştırılmamalı).
+	reqCk, _ := json.Marshal(map[string]interface{}{
+		"model": "m",
+		"input": []interface{}{
+			map[string]interface{}{"role": "user", "content": []interface{}{
+				map[string]interface{}{"type": "input_text", "text": "This is an automatically generated checkpoint condensing an earlier span of the conversation."},
+			}},
+			map[string]interface{}{"role": "user", "content": []interface{}{
+				map[string]interface{}{"type": "input_text", "text": "continue the work"},
+			}},
+		},
+		"instructions": "Sys.",
+		"tools": []interface{}{map[string]interface{}{
+			"type":     "function",
+			"function": map[string]interface{}{"name": "t1", "parameters": map[string]interface{}{"type": "object"}},
+		}},
+	})
+	pCk, _, _, _, err := ConvertOpenAiRequestToGemini(reqCk, "sess-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if textCk := pCk.Request.SystemInstruction.Parts[0].Text; !strings.Contains(textCk, NarrationRuleMarker) {
+		t.Errorf("checkpoint geçmişli normal turda kural basılmalı: %s", textCk)
 	}
 }

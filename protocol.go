@@ -739,20 +739,43 @@ type ProtocolContext struct {
 
 const OfficialAntigravityUserAgent = "antigravity/cli/1.2.7 (aidev_client; os_type=windows; arch=amd64; cl=980147163; auth_method=consumer)"
 
-// NarrationRuleText, plan duyurusu (narration) kuralıdır — istek anında
-// systemInstruction'a eklenir. Metin SABİTTİR (cache-sadakat: her istekte
-// bayt-bayt aynı). Davranış: reasoning BİTER BİTEZ tek seferlik plan duyurusu,
-// sonra araçlar SESSİZ; araç başına tekrar yok. Yeni reasoning döngüsü planı
-// değiştirirse bir sonraki duyuru oradan gelir. İSTEMCİ kuralı zaten
-// taşıyorsa ikinci basım marker ile engellenir (idempotent).
-const NarrationRuleText = "Plan announcement (one per reasoning cycle): after your reasoning/thinking phase ends and you have decided your next steps, write ONE short visible message in the user's language listing the steps you are about to execute (example: \"Next I will: (1) read the config, (2) patch the gateway, (3) run the tests\"). This must be regular visible output text, never inside your thinking block. Then execute the tool calls SILENTLY without narrating each one individually; only when a NEW reasoning cycle changes the plan may you post another brief plan message."
+// NarrationRuleText, SEÇİCİ durum güncellemesi (narration) kuralıdır — istek
+// anında systemInstruction'a eklenir. Metin SABİTTİR (cache-sadakat: her istekte
+// bayt-bayt aynı). Davranış, mimo-v2.6-flash-free oturum analizinden çıkarıldı
+// (DSH session-1e5839fb, 88 mesaj): her araçta DEĞİL, yalnız kullanıcı için
+// değer taşıyan yerde görünür cümle (plan / kanıt-bulgu / anormallik / tehlike /
+// milestone); rutin adım, tekrar ve doğrulama SESSİZ. İSTEMCİ kuralı zaten
+// taşıyorsa (yeni marker veya eski iki kuralın izi) ikinci basım engellenir.
+const NarrationRuleText = "Selective status updates: do NOT narrate every tool call. Write a short visible message (in the user's language) ONLY when the user genuinely benefits: (1) a brief plan when starting or resuming a multi-step task, (2) a notable finding, anomaly, error, or danger worth warning about, (3) a milestone or result worth confirming (example: \"Bug caught live: the RPC never left the client.\"), or (4) a change of approach with its reason. Routine steps, retries, measurements, and verifications must run SILENTLY - no narration per tool call. Keep it 1-2 sentences as regular visible output text, never inside your thinking block. If nothing notable changed, say nothing."
 
 // NarrationRuleMarker, kuralın varlığını saptayan benzersiz öbeğidir.
-const NarrationRuleMarker = "Plan announcement (one per reasoning cycle)"
+const NarrationRuleMarker = "Selective status updates: do NOT narrate every tool call"
 
-// NarrationRuleMarkerLegacy, eski (araç-başına anlatım) kuralın izidir —
-// istemci hâlâ onu taşıyorsa yeni kural üstüne eklenmez (çelişki önlenir).
+// NarrationRuleMarkerLegacy, eski kural izleridir (araç-başına duyuru ve
+// reasoning-başına tek plan) — istemci hâlâ onları taşıyorsa yeni kural
+// üstüne eklenmez (çelişki önlenir).
 const NarrationRuleMarkerLegacy = "Tool-call status updates"
+
+// NarrationRuleMarkerLegacyPlan, ikinci nesil (reasoning-başına tek plan) kuralın izi.
+const NarrationRuleMarkerLegacyPlan = "Plan announcement (one per reasoning cycle)"
+
+// isCompactionSummaryRequest, DSH compaction özetleyici çağrısını tanır.
+// Motor talimatı ("acting as a compaction engine") yalnızca özetleyici
+// isteğinde bulunur; geçmişe (checkpoint metni) YAZILMAZ — bu yüzden
+// normal turlarda tetiklenmez. Kanıt: dump resp_1790641020670'de kural bu
+// isteğin systemInstruction'ında, içerikte özetleyici talimatı vardı.
+func isCompactionSummaryRequest(contents []GeminiContent) bool {
+	if len(contents) == 0 {
+		return false
+	}
+	for _, p := range contents[0].Parts {
+		if strings.Contains(p.Text, "acting as a compaction engine") ||
+			strings.Contains(p.Text, "Output EXACTLY the Markdown structure") {
+			return true
+		}
+	}
+	return false
+}
 
 var (
 	stealthSessionMutex sync.Mutex
@@ -1264,21 +1287,9 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 	// tek istisna isteğe bağlı narration kuralıdır — aşağıda, idempotent).
 	finalSystemPrompt := extractedSystemPrompt
 
-	// ── Araç Duyurusu (Narration) Kuralı — istek anında gateway enjeksiyonu ──
-	// Gemini modelleri anlatıyı düşünce kanalına yazma eğilimindedir; bu kural
-	// reasoning sonrası TEK plan duyurusunu zorunlu kılar (araç başına değil).
-	// İSTEMCİ kuralı zaten taşıyorsa (yeni marker veya eski "Tool-call status
-	// updates" izi) ikinci basım YOK — çelişki de önlenir. Varsayılan AÇIK;
-	// override_settings.json → "narration_hint": false ile kapatılır.
-	if GlobalSettingsManager.NarrationHintEnabled() &&
-		!strings.Contains(finalSystemPrompt, NarrationRuleMarker) &&
-		!strings.Contains(finalSystemPrompt, NarrationRuleMarkerLegacy) {
-		if strings.TrimSpace(finalSystemPrompt) == "" {
-			finalSystemPrompt = NarrationRuleText
-		} else {
-			finalSystemPrompt = finalSystemPrompt + "\n\n" + NarrationRuleText
-		}
-	}
+	// (Narration kuralının enjeksiyonu aşağıda — araç dönüşümünden SONRA;
+	//  çünkü kural yalnız araç taşıyan normal ajan turlarına basılır:
+	//  araçsız istekler ve compaction özetleyicileri hariç tutulur.)
 
 	// Target Model: İstekten gelen modele sadık kal, belirtilmemişse varsayılan gemini-3.8-flash-medium
 	reqModel, _ := body["model"].(string)
@@ -1605,6 +1616,31 @@ func ConvertOpenAiRequestToGemini(rawBody []byte, customSessionID string, ctx ..
 					}
 				}
 			}
+		}
+	}
+
+	// ── Seçici Durum Güncellemesi (Narration) Kuralı — istek anında enjeksiyon ──
+	// Gemini modelleri anlatıyı düşünce kanalına yazma eğilimindedir; bu kural
+	// flash-free analizindeki SEÇİCİ davranışı ister: yalnız kanıt/anormallik/
+	// tehlike/milestone/plan anlarında görünür cümle, rutin adım sessiz.
+	// Hariç tutmalar (kanıtlanmış):
+	//  - araçsız istekler: kuralın konusu araç anlatımıdır, anlamsız;
+	//  - compaction ÖZETLEYİCİLERİ: kural özet metnine plan/duyuru satırı
+	//    karıştırırsa DSH'ın "summary is not smaller" validator'ı sıkıştırmayı
+	//    reddeder (09-29 03:16-03:31: 13 hata; kural yayın ÖNCESİ bu hata tipi 0).
+	// İSTEMCİ kuralı zaten taşıyorsa (yeni marker veya eski iki kuralın izi)
+	// ikinci basım YOK — çelişki de önlenir. Varsayılan AÇIK;
+	// override_settings.json → "narration_hint": false ile kapatılır.
+	if GlobalSettingsManager.NarrationHintEnabled() &&
+		len(geminiTools) > 0 &&
+		!isCompactionSummaryRequest(contents) &&
+		!strings.Contains(finalSystemPrompt, NarrationRuleMarker) &&
+		!strings.Contains(finalSystemPrompt, NarrationRuleMarkerLegacy) &&
+		!strings.Contains(finalSystemPrompt, NarrationRuleMarkerLegacyPlan) {
+		if strings.TrimSpace(finalSystemPrompt) == "" {
+			finalSystemPrompt = NarrationRuleText
+		} else {
+			finalSystemPrompt = finalSystemPrompt + "\n\n" + NarrationRuleText
 		}
 	}
 
